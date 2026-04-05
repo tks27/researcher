@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リサーチャー</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#f0f4f3; --card:#fff; --text:#2c3e3a; --sub:#5a7a70; --muted:#8fa8a0;
+  --accent:#1a9a6c; --accent2:#e8952e; --accent-light:#d0f0e4;
+  --border:#e0e8e5; --hover:#f0faf6;
+  --good:#27ae60; --warn:#e8952e; --bad:#c0392b; --info:#2980b9;
+}
+[data-theme="dark"] {
+  --bg:#161e1c; --card:#1c2a26; --text:#d8e8e2; --sub:#8fb8a8; --muted:#607a70;
+  --accent:#2ecc71; --accent2:#f0a840; --accent-light:#1a3a2c;
+  --border:#2a3e36; --hover:#223830;
+  --good:#2ecc71; --warn:#f0a840; --bad:#e74c3c; --info:#5dade2;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Hiragino Sans','Meiryo',system-ui,sans-serif; background:var(--bg); color:var(--text); transition:background 0.3s,color 0.3s; }
+.container { max-width:1000px; margin:0 auto; padding:16px; }
+h1 { font-size:20px; color:var(--accent); margin-bottom:4px; }
+h1 small { font-size:12px; color:var(--muted); font-weight:normal; }
+.card { background:var(--card); border-radius:12px; padding:20px; margin-bottom:14px; box-shadow:0 1px 8px rgba(0,0,0,0.08); }
+
+/* タブ */
+.tabs { display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; }
+.tabs button { padding:8px 18px; font-size:13px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--sub); cursor:pointer; transition:all 0.2s; }
+.tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.tabs button:hover:not(.active) { background:var(--hover); }
+
+/* 検索 */
+.search-bar { display:flex; gap:8px; margin-bottom:14px; }
+.search-bar input { flex:1; padding:10px 14px; font-size:14px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text); outline:none; }
+.search-bar input:focus { border-color:var(--accent); }
+.search-bar button { padding:10px 20px; font-size:14px; border:none; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; white-space:nowrap; }
+.search-bar button:disabled { opacity:0.5; cursor:not-allowed; }
+
+/* ステータス */
+.status { font-size:12px; color:var(--muted); margin-bottom:10px; min-height:18px; }
+.status.error { color:var(--bad); }
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* 結果 */
+.result-item { padding:14px; border-radius:10px; margin:8px 0; background:var(--card); border-left:3px solid var(--accent); box-shadow:0 1px 4px rgba(0,0,0,0.05); line-height:1.8; }
+.result-item .r-title { font-size:14px; font-weight:bold; color:var(--accent); margin-bottom:4px; }
+.result-item .r-title a { color:var(--accent); text-decoration:none; }
+.result-item .r-title a:hover { text-decoration:underline; }
+.result-item .r-meta { font-size:11px; color:var(--muted); margin-bottom:6px; }
+.result-item .r-body { font-size:13px; color:var(--sub); }
+.result-item .r-tags { margin-top:6px; }
+.result-item .r-tags span { display:inline-block; font-size:10px; padding:2px 8px; border-radius:4px; background:var(--accent-light); color:var(--accent); margin:2px 4px 2px 0; }
+.result-count { font-size:12px; color:var(--muted); margin-bottom:8px; }
+.no-result { font-size:13px; color:var(--muted); padding:20px; text-align:center; }
+
+/* 栄養バー */
+.nutri-bar { display:flex; align-items:center; gap:6px; margin:3px 0; }
+.nutri-bar .n-label { font-size:11px; color:var(--sub); min-width:80px; }
+.nutri-bar .n-track { flex:1; height:8px; background:var(--border); border-radius:4px; }
+.nutri-bar .n-fill { height:100%; border-radius:4px; background:var(--accent); transition:width 0.4s; }
+.nutri-bar .n-val { font-size:11px; color:var(--muted); min-width:60px; text-align:right; }
+
+/* チャート */
+.chart-wrap { position:relative; height:260px; margin:12px 0; }
+
+/* サジェスト */
+.suggest { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.suggest button { font-size:11px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--sub); cursor:pointer; }
+.suggest button:hover { border-color:var(--accent); color:var(--accent); }
+
+/* テーマトグル */
+#themeToggle {
+  position:fixed; top:12px; right:12px; z-index:9999;
+  background:var(--card); border:1px solid var(--border); border-radius:20px;
+  padding:5px 12px; font-size:12px; cursor:pointer; color:var(--text);
+  box-shadow:0 1px 6px rgba(0,0,0,0.1);
+}
+.note { font-size:11px; color:var(--muted); margin-top:14px; line-height:1.7; }
+
+/* GitHub Stars バッジ */
+.stars { color:var(--accent2); font-weight:bold; }
+
+/* 地名カード内 */
+.geo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin:10px 0; }
+.geo-box { background:var(--card); border-radius:8px; padding:12px; border-left:3px solid var(--info); box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+.geo-box .g-val { font-size:16px; font-weight:bold; color:var(--info); }
+.geo-box .g-lbl { font-size:11px; color:var(--muted); margin-top:2px; }
+</style>
+</head>
+<body>
+<button id="themeToggle" onclick="toggleTheme()">Light</button>
+<div class="container">
+  <h1>リサーチャー <small>Multi-Domain Research Tool</small></h1>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="テーマを入力..." autofocus>
+      <button id="searchBtn" onclick="doSearch()">検索</button>
+    </div>
+    <div class="suggest" id="suggest"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="note">
+    ※ すべてブラウザ内で処理されます。データは外部に送信されません（各APIへのリクエストを除く）。<br>
+    ※ 論文: Semantic Scholar API（フォールバック: OpenAlex） / 食品: USDA FoodData Central / 地名: Gemini API + Wikipedia + 国土地理院 + 公式マスターデータ / 技術: GitHub API + npm Registry<br>
+    <button onclick="clearGeminiKey()" style="font-size:11px;padding:2px 8px;margin-top:4px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--sub);cursor:pointer;">Gemini APIキーを削除</button>
+  </div>
+</div>
+
+<script>
+// ===== テーマ =====
+function toggleTheme() {
+  var d = document.documentElement;
+  var next = d.getAttribute('data-theme') === 'dark' ? '' : 'dark';
+  d.setAttribute('data-theme', next);
+  document.getElementById('themeToggle').textContent = next === 'dark' ? 'Light' : 'Dark';
+}
+
+// ===== タブ定義 =====
+var CATEGORIES = [
+  {id:'paper', label:'論文', icon:'', placeholder:'例: sleep quality exercise',
+    suggestions:['sleep quality','machine learning','gut microbiome','climate change','CRISPR']},
+  {id:'food', label:'食品・栄養', icon:'', placeholder:'例: broccoli, salmon, natto',
+    suggestions:['broccoli','salmon','natto','avocado','blueberry','sweet potato','green tea']},
+  {id:'geo', label:'地名・歴史', icon:'', placeholder:'例: 川越, 鎌倉, 京都',
+    suggestions:['川越','鎌倉','京都','長崎','金沢','奈良','広島']},
+  {id:'tech', label:'技術トレンド', icon:'', placeholder:'例: react, rust, deno',
+    suggestions:['react','vue','svelte','rust','deno','bun','htmx','tailwindcss']}
+];
+
+var currentTab = 'paper';
+var charts = {};
+var searchCache = {};
+
+// ===== タブUI =====
+function initTabs() {
+  var tabsEl = document.getElementById('tabs');
+  CATEGORIES.forEach(function(cat) {
+    var btn = document.createElement('button');
+    btn.textContent = cat.label;
+    btn.dataset.id = cat.id;
+    if (cat.id === currentTab) btn.classList.add('active');
+    btn.onclick = function() {
+      currentTab = cat.id;
+      tabsEl.querySelectorAll('button').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      document.getElementById('searchInput').placeholder = cat.placeholder;
+      document.getElementById('searchInput').value = '';
+      document.getElementById('results').innerHTML = '';
+      document.getElementById('status').textContent = '';
+      renderSuggestions();
+    };
+    tabsEl.appendChild(btn);
+  });
+  renderSuggestions();
+  document.getElementById('searchInput').placeholder = CATEGORIES[0].placeholder;
+}
+
+function renderSuggestions() {
+  var cat = CATEGORIES.find(function(c){return c.id===currentTab;});
+  var el = document.getElementById('suggest');
+  el.innerHTML = '';
+  cat.suggestions.forEach(function(s) {
+    var btn = document.createElement('button');
+    btn.textContent = s;
+    btn.onclick = function() {
+      document.getElementById('searchInput').value = s;
+      doSearch();
+    };
+    el.appendChild(btn);
+  });
+}
+
+// ===== 検索ディスパッチ =====
+function doSearch() {
+  var q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  var cacheKey = currentTab + ':' + q;
+  if (searchCache[cacheKey]) {
+    renderResults(currentTab, searchCache[cacheKey], q);
+    return;
+  }
+  var fns = {paper: searchPapers, food: searchFood, geo: searchGeo, tech: searchTech};
+  fns[currentTab](q);
+}
+
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doSearch();
+});
+
+function setStatus(msg, isError) {
+  var el = document.getElementById('status');
+  el.className = 'status' + (isError ? ' error' : '');
+  el.innerHTML = msg;
+}
+function setLoading(msg) {
+  setStatus('<span class="spinner"></span>' + msg);
+  document.getElementById('searchBtn').disabled = true;
+}
+function clearLoading() {
+  document.getElementById('searchBtn').disabled = false;
+}
+
+// ===== 1. 論文検索 (Semantic Scholar → OpenAlex フォールバック) =====
+function searchPapers(q) {
+  setLoading('Semantic Scholar で検索中…');
+  var ssUrl = 'https://api.semanticscholar.org/graph/v1/paper/search?query=' + encodeURIComponent(q)
+    + '&limit=20&fields=title,authors,year,abstract,citationCount,url,openAccessPdf,fieldsOfStudy';
+  fetch(ssUrl).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(data) {
+    clearLoading();
+    if (!data.data || data.data.length === 0) {
+      // Semantic Scholar で見つからない場合も OpenAlex にフォールバック
+      return searchPapersOpenAlex(q);
+    }
+    setStatus(data.total.toLocaleString() + '件中 上位' + data.data.length + '件を表示（Semantic Scholar）');
+    searchCache['paper:' + q] = data.data;
+    renderResults('paper', data.data, q);
+  }).catch(function(e) {
+    // Semantic Scholar 失敗 → OpenAlex にフォールバック
+    setLoading('OpenAlex にフォールバック中…');
+    searchPapersOpenAlex(q);
+  });
+}
+
+function searchPapersOpenAlex(q) {
+  var oaUrl = 'https://api.openalex.org/works?search=' + encodeURIComponent(q)
+    + '&per_page=20&select=id,display_name,authorships,publication_year,cited_by_count,doi,open_access,abstract_inverted_index,concepts&mailto=researcher@example.com';
+  fetch(oaUrl).then(function(r){return r.json();}).then(function(data) {
+    clearLoading();
+    if (!data.results || data.results.length === 0) {
+      setStatus('論文が見つかりませんでした。英語キーワードで再検索してみてください。');
+      document.getElementById('results').innerHTML = '';
+      return;
+    }
+    // OpenAlex → Semantic Scholar互換フォーマットに変換
+    var papers = data.results.map(function(w) {
+      // abstract_inverted_index → 平文に復元
+      var abstract = '';
+      if (w.abstract_inverted_index) {
+        var words = [];
+        Object.keys(w.abstract_inverted_index).forEach(function(word) {
+          w.abstract_inverted_index[word].forEach(function(pos) { words[pos] = word; });
+        });
+        abstract = words.filter(Boolean).join(' ');
+      }
+      var authors = (w.authorships || []).map(function(a) {
+        return {name: a.author ? a.author.display_name : '?'};
+      });
+      var url = w.doi || w.id;
+      var fields = (w.concepts || []).slice(0, 4).map(function(c) { return c.display_name; });
+      return {
+        title: w.display_name,
+        authors: authors,
+        year: w.publication_year,
+        abstract: abstract,
+        citationCount: w.cited_by_count || 0,
+        url: url,
+        openAccessPdf: (w.open_access && w.open_access.oa_url) ? {url: w.open_access.oa_url} : null,
+        fieldsOfStudy: fields
+      };
+    });
+    setStatus(data.meta.count.toLocaleString() + '件中 上位' + papers.length + '件を表示（OpenAlex）');
+    searchCache['paper:' + q] = papers;
+    renderResults('paper', papers, q);
+  }).catch(function(e) {
+    clearLoading();
+    setStatus('検索エラー: ' + e.message, true);
+  });
+}
+
+// ===== 2. 食品・栄養 (USDA FoodData Central) =====
+var USDA_KEY = 'DEMO_KEY';
+function searchFood(q) {
+  setLoading('USDA FoodData Central で検索中…');
+  var url = 'https://api.nal.usda.gov/fdc/v1/foods/search?api_key=' + USDA_KEY
+    + '&query=' + encodeURIComponent(q) + '&pageSize=10&dataType=Survey (FNDDS),Foundation,SR Legacy';
+  fetch(url).then(function(r){return r.json();}).then(function(data) {
+    clearLoading();
+    if (!data.foods || data.foods.length === 0) {
+      setStatus('食品が見つかりませんでした。英語名（例: broccoli）で再検索してみてください。');
+      document.getElementById('results').innerHTML = '';
+      return;
+    }
+    setStatus(data.totalHits.toLocaleString() + '件中 上位' + data.foods.length + '件を表示');
+    searchCache['food:' + q] = data.foods;
+    renderResults('food', data.foods, q);
+  }).catch(function(e) {
+    clearLoading();
+    setStatus('検索エラー: ' + e.message, true);
+  });
+}
+
+// ===== 3. 地名・歴史 (Gemini API + Wikipedia + 国土地理院) =====
+var GEMINI_KEY = localStorage.getItem('gemini_api_key') || '';
+var GEMINI_MODEL = 'gemini-2.5-flash';
+
+function ensureGeminiKey() {
+  if (GEMINI_KEY) return true;
+  var key = prompt('Gemini APIキーを入力してください（初回のみ）\n\n取得: https://aistudio.google.com/apikey');
+  if (key && key.trim()) {
+    GEMINI_KEY = key.trim();
+    localStorage.setItem('gemini_api_key', GEMINI_KEY);
+    return true;
+  }
+  return false;
+}
+
+function clearGeminiKey() {
+  localStorage.removeItem('gemini_api_key');
+  GEMINI_KEY = '';
+  alert('APIキーを削除しました。次回検索時に再入力を求めます。');
+}
+
+function cleanWikitext(text) {
+  return text
+    .replace(/\{\{[^{}]*\}\}/g, '')       // {{テンプレート}} 除去（ネストなし）
+    .replace(/\{\{[^{}]*\}\}/g, '')       // 2回目（1段ネスト対応）
+    .replace(/\{\|[\s\S]*?\|\}/g, '')     // テーブル {| ... |} 除去
+    .replace(/\[\[ファイル:[^\]]*\]\]/g, '') // [[ファイル:...]] 除去
+    .replace(/\[\[File:[^\]]*\]\]/g, '')  // [[File:...]] 除去
+    .replace(/\[\[Category:[^\]]*\]\]/g, '') // カテゴリ除去
+    .replace(/\[\[([^|\]]+\|)?([^\]]+)\]\]/g, '$2') // [[リンク|表示名]] → 表示名
+    .replace(/<ref[^>]*\/>/g, '')         // <ref ... /> 除去
+    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '') // <ref>...</ref> 除去
+    .replace(/<gallery[\s\S]*?<\/gallery>/g, '') // ギャラリー除去
+    .replace(/<[^>]+>/g, '')              // 残りのHTMLタグ
+    .replace(/'{2,}/g, '')                // 太字・斜体マークアップ
+    .replace(/^[\s*#:;]+/gm, '')          // 行頭のリストマーク
+    .replace(/\n{3,}/g, '\n\n')           // 連続改行を圧縮
+    .trim();
+}
+
+// ===== マスターデータ（公式サイトから抽出 / 変更不要） =====
+// 世界遺産26件（文化庁公式）: [都道府県, 遺産名]
+var WORLD_HERITAGE_MASTER=[["奈良県","法隆寺地域の仏教建造物"],["兵庫県","姫路城"],["鹿児島県","屋久島"],["青森県・秋田県","白神山地"],["京都府・滋賀県","古都京都の文化財（京都市、宇治市、大津市）"],["岐阜県・富山県","白川郷・五箇山の合掌造り集落"],["広島県","原爆ドーム"],["広島県","厳島神社"],["奈良県","古都奈良の文化財"],["栃木県","日光の社寺"],["沖縄県","琉球王国のグスク及び関連遺産群"],["三重県・奈良県・和歌山県","紀伊山地の霊場と参詣道"],["北海道","知床"],["島根県","石見銀山遺跡とその文化的景観"],["東京都","小笠原諸島"],["岩手県","平泉‐仏国土（浄土）を表す建築・庭園及び考古学的遺跡群‐"],["山梨県・静岡県","富士山‐信仰の対象と芸術の源泉‐"],["群馬県","富岡製糸場と絹産業遺産群"],["福岡県・佐賀県・長崎県・熊本県・鹿児島県・山口県・岩手県・静岡県","明治日本の産業革命遺産　製鉄・製鋼、造船、石炭産業"],["東京都","ル・コルビュジエの建築作品‐近代建築運動への顕著な貢献‐"],["福岡県","「神宿る島」宗像・沖ノ島と関連遺産群"],["長崎県・熊本県","長崎と天草地方の潜伏キリシタン関連遺産"],["大阪府","百舌鳥・古市古墳群‐古代日本の墳墓群‐"],["鹿児島県・沖縄県","奄美大島、徳之島、沖縄島北部及び西表島"],["北海道・青森県・岩手県・秋田県","北海道・北東北の縄文遺跡群"],["新潟県","佐渡島の金山"]];
+// 重伝建129地区（文化庁公式）: [都道府県, 地区名, 種別]
+var DENKEN_MASTER=[["北海道","函館市元町末広町","港町"],["青森","弘前市仲町","武家町"],["青森","黒石市中町","商家町"],["岩手","金ケ崎町城内諏訪小路","武家町"],["宮城","村田町村田","商家町"],["秋田","横手市増田","在郷町"],["秋田","仙北市角館","武家町"],["福島","喜多方市小田付","在郷町・醸造町"],["福島","下郷町大内宿","宿場町"],["福島","南会津町前沢","山村集落"],["茨城","桜川市真壁","在郷町"],["栃木","栃木市嘉右衛門町","在郷町"],["群馬","桐生市桐生新町","製織町"],["群馬","中之条町六合赤岩","山村・養蚕集落"],["埼玉","川越市川越","商家町"],["千葉","香取市佐原","商家町"],["新潟","佐渡市宿根木","港町"],["新潟","佐渡市小木町","港町"],["富山","高岡市山町筋","商家町"],["富山","高岡市金屋町","鋳物師町"],["富山","高岡市吉久","在郷町"],["富山","南砺市相倉","山村集落"],["富山","南砺市菅沼","山村集落"],["石川","金沢市東山ひがし","茶屋町"],["石川","金沢市主計町","茶屋町"],["石川","金沢市卯辰山麓","寺町"],["石川","金沢市寺町台","寺町"],["石川","輪島市黒島地区","船主集落"],["石川","加賀市加賀橋立","船主集落"],["石川","加賀市加賀東谷","山村集落"],["石川","白山市白峰","山村・養蚕集落"],["福井","小浜市小浜西組","商家町・茶屋町"],["福井","南越前町今庄宿","宿場町"],["福井","若狭町熊川宿","宿場町"],["山梨","甲州市塩山下小田原上条","山村・養蚕集落"],["山梨","早川町赤沢","山村・講中宿"],["長野","長野市戸隠","宿坊群・門前町"],["長野","須坂市須坂","製糸町・商家町"],["長野","塩尻市奈良井","宿場町"],["長野","塩尻市木曾平沢","漆工町"],["長野","千曲市稲荷山","商家町"],["長野","東御市海野宿","宿場・養蚕町"],["長野","南木曽町妻籠宿","宿場町"],["長野","白馬村青鬼","山村集落"],["岐阜","高山市三町","商家町"],["岐阜","高山市下二之町大新町","商家町"],["岐阜","美濃市美濃町","商家町"],["岐阜","恵那市岩村町本通り","商家町"],["岐阜","郡上市郡上八幡北町","城下町"],["岐阜","白川村荻町","山村集落"],["静岡","焼津市花沢","山村集落"],["愛知","名古屋市有松","染織町"],["愛知","豊田市足助","商家町"],["三重","亀山市関宿","宿場町"],["滋賀","大津市坂本","里坊群・門前町"],["滋賀","彦根市河原町芹町地区","商家町"],["滋賀","近江八幡市八幡","商家町"],["滋賀","東近江市五個荘金堂","農村集落"],["京都","京都市上賀茂","社家町"],["京都","京都市産寧坂","門前町"],["京都","京都市祇園新橋","茶屋町"],["京都","京都市嵯峨鳥居本","門前町"],["京都","南丹市美山町北","山村集落"],["京都","伊根町伊根浦","漁村"],["京都","与謝野町加悦","製織町"],["大阪","富田林市富田林","寺内町・在郷町"],["兵庫","神戸市北野町山本通","港町"],["兵庫","豊岡市出石","城下町"],["兵庫","丹波篠山市篠山","城下町"],["兵庫","丹波篠山市福住","宿場町・農村集落"],["兵庫","養父市大屋町大杉","山村・養蚕集落"],["兵庫","たつの市龍野","商家町・醸造町"],["奈良","橿原市今井町","寺内町・在郷町"],["奈良","五條市五條新町","商家町"],["奈良","宇陀市松山","商家町"],["和歌山","湯浅町湯浅","醸造町"],["鳥取","倉吉市打吹玉川","商家町"],["鳥取","若桜町若桜","商家町"],["鳥取","大山町所子","農村集落"],["島根","大田市大森銀山","鉱山町"],["島根","大田市温泉津","港町・温泉町"],["島根","津和野町津和野","武家町・商家町"],["岡山","倉敷市倉敷川畔","商家町"],["岡山","津山市城東","商家町"],["岡山","津山市城西","寺町・商家町"],["岡山","高梁市吹屋","鉱山町"],["岡山","矢掛町矢掛宿","宿場町"],["広島","呉市豊町御手洗","港町"],["広島","竹原市竹原地区","製塩町"],["広島","福山市鞆町","港町"],["広島","廿日市市宮島町","門前町"],["山口","萩市堀内地区","武家町"],["山口","萩市平安古地区","武家町"],["山口","萩市浜崎","港町"],["山口","萩市佐々並市","宿場町"],["山口","柳井市古市金屋","商家町"],["徳島","美馬市脇町南町","商家町"],["徳島","三好市東祖谷山村落合","山村集落"],["徳島","牟岐町出羽島","漁村集落"],["香川","丸亀市塩飽本島町笠島","港町"],["愛媛","宇和島市津島町岩松","在郷町"],["愛媛","西予市宇和町卯之町","在郷町"],["愛媛","内子町八日市護国","製蝋町"],["高知","室戸市吉良川町","在郷町"],["高知","安芸市土居廓中","武家町"],["福岡","八女市八女福島","商家町"],["福岡","八女市黒木","在郷町"],["福岡","うきは市筑後吉井","在郷町"],["福岡","うきは市新川田篭","山村集落"],["福岡","朝倉市秋月","城下町"],["佐賀","鹿島市浜庄津町浜金屋町","港町・在郷町"],["佐賀","鹿島市浜中町八本木宿","醸造町"],["佐賀","嬉野市塩田津","商家町"],["佐賀","有田町有田内山","製磁町"],["長崎","長崎市東山手","港町"],["長崎","長崎市南山手","港町"],["長崎","平戸市大島村神浦","港町"],["長崎","雲仙市神代小路","武家町"],["大分","日田市豆田町","商家町"],["大分","杵築市北台南台","武家町"],["宮崎","日南市飫肥","武家町"],["宮崎","日向市美々津","港町"],["宮崎","椎葉村十根川","山村集落"],["鹿児島","出水市出水麓","武家町"],["鹿児島","薩摩川内市入来麓","武家町"],["鹿児島","南さつま市加世田麓","武家町"],["鹿児島","南九州市知覧","武家町"],["沖縄","渡名喜村渡名喜島","島の農村集落"],["沖縄","竹富町竹富島","島の農村集落"]];
+// 日本遺産106件（文化庁公式サイトから抽出）: [都道府県(カンマ区切り), ストーリー名]
+var JAPAN_HERITAGE_MASTER=[["茨城県,栃木県,岡山県,大分県","近世日本の教育遺産群"],["群馬県","かかあ天下"],["富山県","加賀前田家ゆかりの町民文化が花咲くまち高岡"],["石川県","灯（あか）り舞う半島　能登"],["福井県","海と都をつなぐ若狭の往来文化遺産群"],["岐阜県","「信長公のおもてなし」が息づく戦国城下町・岐阜"],["三重県","祈る皇女斎王のみやこ　斎宮"],["滋賀県","琵琶湖とその水辺景観"],["京都府","日本茶800年の歴史散歩"],["兵庫県","丹波篠山デカンショ節"],["奈良県","日本国創成のとき"],["鳥取県","六根清浄と六感治癒の地"],["島根県","津和野今昔"],["広島県","尾道水道が紡いだ中世からの箱庭的都市"],["徳島県,香川県,愛媛県,高知県","「四国遍路」"],["長崎県","国境の島　壱岐・対馬・五島"],["熊本県","相良700年が生んだ保守と進取の文化"],["宮城県","政宗が育んだ\"伊達\"な文化"],["山形県","自然と信仰が息づく『生まれかわりの旅』"],["福島県","会津の三十三観音めぐり"],["福島県","未来を拓いた「一本の水路」"],["千葉県","「北総四都市江戸紀行・江戸を感じる北総の町並み」"],["神奈川県","江戸庶民の信仰と行楽の地"],["神奈川県","「いざ、鎌倉」"],["新潟県","「なんだ、コレは！」 信濃川流域の火焔型土器と雪国の文化"],["石川県","『珠玉と歩む物語』小松"],["長野県,岐阜県","木曽路はすべて山の中"],["岐阜県","飛騨匠の技・こころ"],["兵庫県","『古事記』の冒頭を飾る「国生みの島・淡路」"],["奈良県","森に育まれ、森を育んだ人々の暮らしとこころ"],["和歌山県","鯨とともに生きる"],["鳥取県","地蔵信仰が育んだ日本最大の大山牛馬市"],["島根県","出雲國たたら風土記"],["神奈川県,京都府,広島県,長崎県","鎮守府　横須賀・呉・佐世保・舞鶴"],["広島県,愛媛県","\"日本最大の海賊\"の本拠地：芸予諸島"],["佐賀県,長崎県","日本磁器のふるさと　肥前"],["北海道","江差の五月は江戸にもない"],["北海道,青森県,秋田県,山形県,新潟県,富山県,石川県,福井県,京都府,大阪府,兵庫県,鳥取県,島根県,岡山県,広島県,香川県","荒波を越えた男たちの夢が紡いだ異空間"],["山形県","サムライゆかりのシルク"],["埼玉県","和装文化の足元を支え続ける足袋蔵のまち行田"],["三重県,滋賀県","忍びの里　伊賀・甲賀"],["京都府","300年を紡ぐ絹が織り成す丹後ちりめん回廊"],["大阪府,奈良県","1400年に渡る悠久の歴史を伝える「最古の国道」"],["兵庫県","播但貫く、銀の馬車道 鉱石の道"],["和歌山県","絶景の宝庫 和歌の浦"],["和歌山県","「最初の一滴」醤油醸造の発祥の地 紀州湯浅"],["島根県","日が沈む聖地出雲"],["岡山県","一輪の綿花から始まる倉敷物語"],["福井県,愛知県,滋賀県,兵庫県,岡山県","きっと恋する六古窯"],["高知県","森林鉄道から日本一のゆずロードへ"],["山口県,福岡県","関門\"ノスタルジック\"海峡"],["熊本県","米作り、二千年にわたる大地の記憶"],["大分県","やばけい遊覧"],["北海道","カムイと共に生きる上川アイヌ"],["山形県","山寺が支えた紅花文化"],["栃木県","地下迷宮の秘密を探る旅"],["栃木県","明治貴族が描いた未来"],["富山県","宮大工の鑿一丁から生まれた木彫刻美術館・井波"],["山梨県","葡萄畑が織りなす風景"],["山梨県,長野県","星降る中部高地の縄文世界"],["神奈川県,静岡県","旅人たちの足跡残る悠久の石畳道"],["和歌山県","「百世の安堵」"],["岡山県","「桃太郎伝説」の生まれたまち おかやま"],["広島県","瀬戸の夕凪が包む　国内随一の近世港町"],["大分県","鬼が仏になった里「くにさき」"],["宮崎県","古代人のモニュメント"],["北海道","本邦国策を北海道に観よ！"],["岩手県,宮城県","みちのくGOLD浪漫"],["群馬県","里沼（SATO-NUMA）"],["福井県","400年の歴史の扉を開ける旅"],["愛知県","江戸時代の情緒に触れる絞りの産地"],["三重県","海女(Ama）に出逢えるまち 鳥羽・志摩"],["岐阜県,滋賀県,京都府,大阪府,兵庫県,奈良県,和歌山県","1300年つづく日本の終活の旅"],["大阪府","旅引付と二枚の絵図が伝えるまち"],["大阪府","中世に出逢えるまち"],["兵庫県","「日本第一」の塩を産したまち 播州赤穂"],["兵庫県,鳥取県","日本海の風が生んだ絶景と秘境"],["島根県","神々や鬼たちが躍動する神話の世界"],["岡山県,香川県","知ってる!?悠久の時が流れる石の島"],["徳島県","藍のふるさと　阿波"],["鹿児島県","薩摩の武士が生きた町"],["沖縄県","琉球王国時代から連綿と続く沖縄の伝統的な「琉球料理」と「泡盛」、そして「芸能」"],["北海道","「鮭の聖地」の物語"],["岩手県","\"奥南部\"漆物語"],["茨城県,山梨県","日本ワイン140年史"],["茨城県,栃木県","かさましこ"],["東京都","霊気満山　高尾山"],["新潟県","究極の雪国とおかまち"],["福井県,滋賀県","海を越えた鉄道"],["山梨県","甲州の匠の源流・御嶽昇仙峡"],["長野県","月の都　千曲"],["長野県","レイラインがつなぐ「太陽と大地の聖地」"],["静岡県","日本初「旅ブーム」を起こした弥次さん喜多さん、駿州の旅"],["滋賀県,京都府","京都と大津を繋ぐ希望の水路　琵琶湖疏水"],["大阪府,奈良県,和歌山県","女性とともに今に息づく女人高野"],["兵庫県","「伊丹諸白」と「灘の生一本」"],["大阪府,奈良県","もう、すべらせない！！"],["大阪府,奈良県,和歌山県","「葛城修験」"],["島根県","中世日本の傑作 益田を味わう"],["島根県","石見の火山が伝える悠久の歴史"],["岡山県","「ジャパンレッド」発祥の地"],["福岡県,佐賀県,長崎県","砂糖文化を広めた長崎街道"],["熊本県","八代を創造（たがや）した石工たちの軌跡"],["北海道","北海道の『心臓』と呼ばれたまち・小樽"]];
+// 一宮83社（Wikipedia「一宮」記事準拠）: [県名, 神社名, 市町村, 旧国名]
+var ICHINOMIYA_MASTER=[["京都","賀茂別雷神社","京都市","山城国"],["京都","賀茂御祖神社","京都市","山城国"],["奈良","大神神社","桜井市","大和国"],["大阪","枚岡神社","東大阪市","河内国"],["大阪","大鳥大社","堺市","和泉国"],["大阪","住吉大社","大阪市","摂津国"],["三重","敢国神社","伊賀市","伊賀国"],["三重","椿大神社","鈴鹿市","伊勢国"],["三重","伊雑宮","志摩市","志摩国"],["愛知","真清田神社","一宮市","尾張国"],["愛知","砥鹿神社","豊川市","三河国"],["静岡","小国神社","森町","遠江国"],["静岡","事任八幡宮","掛川市","遠江国"],["静岡","富士山本宮浅間大社","富士宮市","駿河国"],["静岡","三嶋大社","三島市","伊豆国"],["山梨","浅間神社","笛吹市","甲斐国"],["神奈川","寒川神社","寒川町","相模国"],["東京","小野神社","多摩市","武蔵国"],["埼玉","氷川神社","さいたま市","武蔵国"],["千葉","安房神社","館山市","安房国"],["千葉","玉前神社","一宮町","上総国"],["千葉","香取神宮","香取市","下総国"],["茨城","鹿島神宮","鹿嶋市","常陸国"],["滋賀","建部大社","大津市","近江国"],["岐阜","南宮大社","垂井町","美濃国"],["岐阜","飛騨一宮水無神社","高山市","飛騨国"],["長野","諏訪大社","諏訪市","信濃国"],["群馬","一之宮貫前神社","富岡市","上野国"],["栃木","二荒山神社","宇都宮市","下野国"],["宮城","鹽竈神社","塩竈市","陸奥国"],["福島","都都古和氣神社","棚倉町","磐城国"],["山形","鳥海山大物忌神社","遊佐町","出羽国"],["福井","若狭彦神社","小浜市","若狭国"],["福井","氣比神宮","敦賀市","越前国"],["石川","白山比咩神社","白山市","加賀国"],["石川","氣多大社","羽咋市","能登国"],["富山","気多神社","高岡市","越中国"],["富山","高瀬神社","南砺市","越中国"],["富山","射水神社","高岡市","越中国"],["富山","雄山神社","立山町","越中国"],["新潟","彌彦神社","弥彦村","越後国"],["新潟","居多神社","上越市","越後国"],["新潟","度津神社","佐渡市","佐渡国"],["京都","出雲大神宮","亀岡市","丹波国"],["京都","籠神社","宮津市","丹後国"],["兵庫","出石神社","豊岡市","但馬国"],["鳥取","宇倍神社","鳥取市","因幡国"],["鳥取","倭文神社","湯梨浜町","伯耆国"],["島根","出雲大社","出雲市","出雲国"],["島根","物部神社","大田市","石見国"],["島根","水若酢神社","隠岐の島町","隠岐国"],["兵庫","伊和神社","宍粟市","播磨国"],["岡山","中山神社","津山市","美作国"],["岡山","吉備津彦神社","岡山市","備前国"],["岡山","吉備津神社","岡山市","備中国"],["広島","厳島神社","廿日市市","安芸国"],["山口","玉祖神社","防府市","周防国"],["山口","住吉神社","下関市","長門国"],["和歌山","日前神宮・國懸神宮","和歌山市","紀伊国"],["和歌山","丹生都比売神社","かつらぎ町","紀伊国"],["兵庫","伊弉諾神宮","淡路市","淡路国"],["徳島","大麻比古神社","鳴門市","阿波国"],["香川","田村神社","高松市","讃岐国"],["愛媛","大山祇神社","今治市","伊予国"],["高知","土佐神社","高知市","土佐国"],["福岡","高良大社","久留米市","筑後国"],["大分","宇佐神宮","宇佐市","豊前国"],["大分","柞原八幡宮","大分市","豊後国"],["佐賀","與止日女神社","佐賀市","肥前国"],["佐賀","千栗八幡宮","みやき町","肥前国"],["熊本","阿蘇神社","阿蘇市","肥後国"],["宮崎","都農神社","都農町","日向国"],["鹿児島","鹿児島神宮","霧島市","大隅国"],["鹿児島","枚聞神社","指宿市","薩摩国"],["鹿児島","新田神社","薩摩川内市","薩摩国"],["長崎","興神社","壱岐市","壱岐国"],["長崎","海神神社","対馬市","対馬国"]];
+// 国立公園34+ジオパーク55（環境省・日本ジオパーク委員会準拠）: [都道府県, 名称, 種別]
+var GEOPARK_NP_MASTER=[["北海道","利尻礼文サロベツ国立公園","国立公園"],["北海道","知床国立公園","国立公園"],["北海道","阿寒摩周国立公園","国立公園"],["北海道","釧路湿原国立公園","国立公園"],["北海道","大雪山国立公園","国立公園"],["青森県","十和田八幡平国立公園","国立公園"],["岩手県","三陸復興国立公園","国立公園"],["宮城県","磐梯朝日国立公園","国立公園"],["福島県","日光国立公園","国立公園"],["栃木県","尾瀬国立公園","国立公園"],["群馬県","上信越高原国立公園","国立公園"],["埼玉県","秩父多摩甲斐国立公園","国立公園"],["神奈川県","富士箱根伊豆国立公園","国立公園"],["新潟県","妙高戸隠連山国立公園","国立公園"],["富山県","中部山岳国立公園","国立公園"],["石川県","白山国立公園","国立公園"],["福井県","若狭湾国立公園","国立公園"],["長野県","南アルプス国立公園","国立公園"],["静岡県","伊勢志摩国立公園","国立公園"],["三重県","吉野熊野国立公園","国立公園"],["奈良県","山陰海岸国立公園","国立公園"],["鳥取県","大山隠岐国立公園","国立公園"],["岡山県","瀬戸内海国立公園","国立公園"],["広島県","足摺宇和海国立公園","国立公園"],["高知県","雲仙天草国立公園","国立公園"],["長崎県","西海国立公園","国立公園"],["熊本県","阿蘇くじゅう国立公園","国立公園"],["大分県","霧島錦江湾国立公園","国立公園"],["宮崎県","屋久島国立公園","国立公園"],["鹿児島県","奄美群島国立公園","国立公園"],["沖縄県","やんばる国立公園","国立公園"],["沖縄県","慶良間諸島国立公園","国立公園"],["東京都","小笠原国立公園","国立公園"],["東京都","富士箱根伊豆国立公園","国立公園"],["北海道","アポイ岳ジオパーク","ジオパーク"],["北海道","洞爺湖有珠山ジオパーク","ジオパーク"],["北海道","白滝ジオパーク","ジオパーク"],["北海道","三笠ジオパーク","ジオパーク"],["青森県","下北ジオパーク","ジオパーク"],["岩手県","八戸ジオパーク","ジオパーク"],["岩手県","三陸ジオパーク","ジオパーク"],["宮城県","栗原ジオパーク","ジオパーク"],["秋田県","男鹿半島・大潟ジオパーク","ジオパーク"],["山形県","出羽庄内ジオパーク","ジオパーク"],["福島県","磐梯山ジオパーク","ジオパーク"],["茨城県","茨城県北ジオパーク","ジオパーク"],["栃木県","那須高原ジオパーク","ジオパーク"],["群馬県","浅間山北麓ジオパーク","ジオパーク"],["群馬県","下仁田ジオパーク","ジオパーク"],["埼玉県","秩父ジオパーク","ジオパーク"],["千葉県","銚子ジオパーク","ジオパーク"],["新潟県","糸魚川ジオパーク","ジオパーク"],["新潟県","佐渡ジオパーク","ジオパーク"],["新潟県","苗場山麓ジオパーク","ジオパーク"],["富山県","立山黒部ジオパーク","ジオパーク"],["石川県","白山手取川ジオパーク","ジオパーク"],["福井県","恐竜渓谷ふくい勝山ジオパーク","ジオパーク"],["山梨県","南アルプスジオパーク","ジオパーク"],["長野県","中央構造線ジオパーク","ジオパーク"],["岐阜県","飛騨御嶽ジオパーク","ジオパーク"],["静岡県","伊豆半島ジオパーク","ジオパーク"],["静岡県","箱根ジオパーク","ジオパーク"],["愛知県","設楽ジオパーク","ジオパーク"],["三重県","伊勢志摩ジオパーク","ジオパーク"],["京都府","丹後ジオパーク","ジオパーク"],["兵庫県","山陰海岸ジオパーク","ジオパーク"],["兵庫県","丹波篠山ジオパーク","ジオパーク"],["和歌山県","有田川ジオパーク","ジオパーク"],["鳥取県","鳥取砂丘ジオパーク","ジオパーク"],["島根県","隠岐ジオパーク","ジオパーク"],["島根県","島根半島・宍道湖中海ジオパーク","ジオパーク"],["岡山県","吉備高原ジオパーク","ジオパーク"],["広島県","芸北ジオパーク","ジオパーク"],["山口県","阿武火山群ジオパーク","ジオパーク"],["徳島県","阿波ジオパーク","ジオパーク"],["香川県","小豆島ジオパーク","ジオパーク"],["愛媛県","四国西予ジオパーク","ジオパーク"],["高知県","室戸ジオパーク","ジオパーク"],["福岡県","筑豊ジオパーク","ジオパーク"],["長崎県","島原半島ジオパーク","ジオパーク"],["長崎県","五島列島ジオパーク","ジオパーク"],["熊本県","阿蘇ジオパーク","ジオパーク"],["大分県","おおいた豊後大野ジオパーク","ジオパーク"],["宮崎県","霧島ジオパーク","ジオパーク"],["鹿児島県","桜島・錦江湾ジオパーク","ジオパーク"],["鹿児島県","三島村・十島村ジオパーク","ジオパーク"],["沖縄県","沖縄ジオパーク","ジオパーク"]];
+// 山鉾屋台33件（文化庁公式PDF準拠）: [県名(県なし), 祭り名]
+var YAMAHOKO_MASTER=[["青森","八戸三社大祭の山車行事"],["秋田","角館祭りのやま行事"],["秋田","土崎神明社祭の曳山行事"],["秋田","花輪祭の屋台行事"],["山形","新庄まつりの山車行事"],["茨城","日立風流物"],["茨城","常陸大津の御船祭"],["栃木","烏山の山あげ行事"],["栃木","鹿沼今宮神社祭の屋台行事"],["埼玉","秩父祭の屋台行事と神楽"],["埼玉","川越氷川祭の山車行事"],["千葉","佐原の山車行事"],["富山","高岡御車山祭の御車山行事"],["富山","魚津のタテモン行事"],["富山","城端神明宮祭の曳山行事"],["富山","放生津八幡宮祭の曳山・築山行事"],["石川","青柏祭の曳山行事"],["岐阜","高山祭の屋台行事"],["岐阜","古川祭の起し太鼓・屋台行事"],["岐阜","大垣祭の軕行事"],["愛知","尾張津島天王祭の車楽舟行事"],["愛知","知立の山車文楽とからくり"],["愛知","犬山祭の車山行事"],["愛知","亀崎潮干祭の山車行事"],["愛知","須成祭の車楽船行事と神葭流し"],["三重","鳥出神社の鯨船行事"],["三重","上野天神祭のダンジリ行事"],["三重","桑名石取祭の祭車行事"],["滋賀","長浜曳山祭の曳山行事"],["滋賀","大津祭の曳山行事"],["京都","京都祇園祭の山鉾行事"],["福岡","博多祇園山笠行事"],["福岡","戸畑祇園大山笠行事"],["佐賀","唐津くんちの曳山行事"],["熊本","八代妙見祭の神幸行事"],["大分","日田祇園の曳山行事"]];
+// 100名城: [県名(県なし), 城名, 市町村, スタンプ設置場所]
+var CASTLE100_MASTER=[["北海道","根室半島チャシ跡群","根室市","根室市歴史と自然の資料館"],["北海道","五稜郭","函館市","五稜郭タワー1F"],["北海道","松前城","松前町","松前城資料館"],["青森","弘前城","弘前市","弘前城天守内"],["青森","根城","八戸市","八戸市博物館"],["岩手","盛岡城","盛岡市","もりおか歴史文化館2F"],["宮城","多賀城","多賀城市","多賀城跡管理事務所"],["宮城","仙台城","仙台市","仙台城見聞館"],["秋田","久保田城","秋田市","久保田城御隅櫓"],["山形","山形城","山形市","山形市郷土館"],["福島","二本松城","二本松市","二本松市歴史資料館"],["福島","会津若松城","会津若松市","天守閣内売店"],["福島","白河小峰城","白河市","白河集古苑"],["茨城","水戸城","水戸市","弘道館料金所窓口"],["栃木","足利氏館","足利市","足利学校事務所"],["群馬","箕輪城","高崎市","高崎市箕郷支所"],["群馬","金山城","太田市","中島記念公園"],["埼玉","鉢形城","寄居町","鉢形城歴史館受付"],["埼玉","川越城","川越市","川越城本丸御殿受付窓口"],["千葉","佐倉城","佐倉市","佐倉城址公園管理センター"],["東京","江戸城","千代田区","楠公休憩場/和田倉休憩場"],["東京","八王子城","八王子市","八王子城跡管理棟"],["神奈川","小田原城","小田原市","天守閣1階"],["山梨","武田氏館","甲府市","武田神社宝物殿"],["山梨","甲府城","甲府市","舞鶴城公園管理事務所"],["長野","松代城","長野市","松代城跡管理棟"],["長野","上田城","上田市","上田市立博物館/上田城南櫓"],["長野","小諸城","小諸市","懐古園事務所"],["長野","松本城","松本市","松本城管理事務所"],["長野","高遠城","伊那市","伊那市立高遠町歴史博物館"],["新潟","新発田城","新発田市","新発田城表門"],["新潟","春日山城","上越市","春日山城跡ものがたり館"],["富山","高岡城","高岡市","高岡市立博物館"],["石川","七尾城","七尾市","七尾城史資料館"],["石川","金沢城","金沢市","石川門入口案内所"],["福井","丸岡城","坂井市","霞ヶ城公園管理事務所"],["福井","一乗谷城","福井市","復原町並入口"],["岐阜","岩村城","恵那市","岩村歴史資料館"],["岐阜","岐阜城","岐阜市","岐阜城資料館"],["静岡","山中城","三島市","山中城跡売店"],["静岡","駿府城","静岡市","東御門券売所"],["静岡","掛川城","掛川市","掛川城御殿"],["愛知","犬山城","犬山市","犬山城管理事務所"],["愛知","名古屋城","名古屋市","正門改札所"],["愛知","岡崎城","岡崎市","天守1階"],["愛知","長篠城","新城市","長篠城址史跡保存館"],["三重","伊賀上野城","伊賀市","大天守閣1階"],["三重","松阪城","松阪市","松阪市立歴史民俗資料館"],["滋賀","小谷城","長浜市","小谷城戦国歴史資料館"],["滋賀","彦根城","彦根市","彦根城表門券売所"],["滋賀","安土城","近江八幡市","安土城郭資料館"],["滋賀","観音寺城","近江八幡市","安土城郭資料館"],["京都","二条城","京都市","大休憩所"],["大阪","大阪城","大阪市","天守閣1階"],["大阪","千早城","千早赤阪村","金剛山麓まつまさ"],["兵庫","竹田城","朝来市","竹田城跡料金所"],["兵庫","篠山城","丹波篠山市","大書院館内"],["兵庫","明石城","明石市","明石公園サービスセンター"],["兵庫","姫路城","姫路市","姫路城管理事務所"],["兵庫","赤穂城","赤穂市","本丸櫓門下"],["奈良","高取城","高取町","高取町観光案内所"],["和歌山","和歌山城","和歌山市","和歌山城天守閣チケット売場"],["鳥取","鳥取城","鳥取市","仁風閣"],["島根","松江城","松江市","松江城天守内"],["島根","月山富田城","安来市","安来市立歴史資料館"],["島根","津和野城","津和野町","リフト茶屋"],["岡山","津山城","津山市","津山城備中櫓受付"],["岡山","備中松山城","高梁市","備中松山城券売所"],["岡山","鬼ノ城","総社市","鬼城山ビジターセンター"],["岡山","岡山城","岡山市","岡山城天守閣入口"],["広島","福山城","福山市","福山城天守閣内"],["広島","吉田郡山城","安芸高田市","安芸高田市歴史民俗博物館"],["広島","広島城","広島市","天守閣内ミュージアムショップ"],["山口","岩国城","岩国市","岩国城受付窓口"],["山口","萩城","萩市","本丸入口料金所"],["徳島","徳島城","徳島市","徳島市立徳島城博物館"],["香川","高松城","高松市","高松城西門/東門"],["香川","丸亀城","丸亀市","丸亀城天守"],["愛媛","今治城","今治市","今治城管理事務所"],["愛媛","湯築城","松山市","湯築城資料館"],["愛媛","松山城","松山市","松山城天守入口"],["愛媛","大洲城","大洲市","台所櫓入口"],["愛媛","宇和島城","宇和島市","宇和島城天守"],["高知","高知城","高知市","本丸御殿入口"],["福岡","福岡城","福岡市","福岡城むかし探訪館"],["福岡","大野城","太宰府市","大宰府展示館"],["佐賀","名護屋城","唐津市","名護屋城博物館"],["佐賀","吉野ヶ里","吉野ヶ里町","吉野ヶ里歴史公園東口"],["佐賀","佐賀城","佐賀市","佐賀城本丸歴史館"],["長崎","平戸城","平戸市","平戸城天守閣"],["長崎","島原城","島原市","島原城受付窓口"],["熊本","熊本城","熊本市","城彩苑総合観光案内所"],["熊本","人吉城","人吉市","人吉城歴史館"],["大分","大分府内城","大分市","大分市文化財課"],["大分","岡城","竹田市","岡城跡料金所"],["宮崎","飫肥城","日南市","飫肥城歴史資料館"],["鹿児島","鹿児島城","鹿児島市","黎明館総合案内所"],["沖縄","今帰仁城","今帰仁村","今帰仁村グスク交流センター"],["沖縄","中城城","中城村","管理事務所窓口"],["沖縄","首里城","那覇市","首里杜館/系図座・用物座"]];
+// 続100名城: [県名(県なし), 城名, 市町村, スタンプ設置場所]
+var CASTLE100C_MASTER=[["北海道","志苔館","函館市","志苔館入口"],["北海道","上ノ国勝山館","上ノ国町","勝山館跡ガイダンス施設"],["青森","浪岡城","青森市","中世の館"],["青森","九戸城","二戸市","二戸市埋蔵文化財センター"],["岩手","盛岡城","盛岡市","もりおか歴史文化館"],["宮城","白石城","白石市","白石城天守閣"],["秋田","脇本城","男鹿市","脇本城跡案内所"],["秋田","秋田城","秋田市","秋田城跡歴史資料館"],["山形","鶴ヶ岡城","鶴岡市","荘内神社社務所"],["山形","米沢城","米沢市","米沢観光コンベンション協会"],["福島","三春城","三春町","三春町歴史民俗資料館"],["福島","向羽黒山城","会津美里町","向羽黒山城跡整備資料室"],["茨城","笠間城","笠間市","かさま歴史交流館井筒屋"],["茨城","土浦城","土浦市","土浦城東櫓"],["栃木","唐沢山城","佐野市","唐沢山神社社務所"],["群馬","名胡桃城","みなかみ町","名胡桃城址案内所"],["群馬","沼田城","沼田市","沼田市観光案内所"],["群馬","岩櫃城","東吾妻町","東吾妻町観光協会"],["埼玉","忍城","行田市","行田市郷土博物館"],["埼玉","杉山城","嵐山町","嵐山町役場"],["埼玉","菅谷館","嵐山町","埼玉県立嵐山史跡の博物館"],["千葉","本佐倉城","酒々井町","酒々井町中央公民館"],["千葉","大多喜城","大多喜町","大多喜城分館"],["東京","滝山城","八王子市","滝山城跡中の丸"],["神奈川","小机城","横浜市","城郷小机地区センター"],["神奈川","石垣山城","小田原市","石垣山一夜城駐車場"],["山梨","新府城","韮崎市","韮崎市民俗資料館"],["山梨","要害山城","甲府市","甲府市藤村記念館"],["長野","龍岡城","佐久市","五稜郭であいの館"],["長野","高島城","諏訪市","高島城1階"],["新潟","村上城","村上市","村上市郷土資料館"],["新潟","高田城","上越市","上越市立歴史博物館"],["新潟","鮫ヶ尾城","妙高市","斐太歴史の里総合案内所"],["富山","富山城","富山市","富山市郷土博物館"],["富山","増山城","砺波市","砺波市埋蔵文化財センター"],["石川","鳥越城","白山市","白山市立鳥越一向一揆歴史館"],["福井","福井城","福井市","福井県庁舎1階受付"],["福井","越前大野城","大野市","越前大野城1階"],["福井","佐柿国吉城","美浜町","若狭国吉城歴史資料館"],["福井","玄蕃尾城","敦賀市","余呉湖観光館"],["岐阜","郡上八幡城","郡上市","郡上八幡城1階"],["岐阜","苗木城","中津川市","苗木遠山史料館"],["岐阜","美濃金山城","可児市","可児市戦国山城ミュージアム"],["岐阜","大垣城","大垣市","大垣城天守1階"],["静岡","興国寺城","沼津市","興国寺城跡穂見神社"],["静岡","諏訪原城","島田市","諏訪原城ビジターセンター"],["静岡","高天神城","掛川市","大東北公民館"],["静岡","浜松城","浜松市","浜松城天守閣1階"],["愛知","小牧山城","小牧市","小牧市歴史館"],["愛知","古宮城","新城市","作手歴史民俗資料館"],["愛知","吉田城","豊橋市","豊橋市役所東館13階"],["三重","津城","津市","高山神社社務所"],["三重","北畠氏館","津市","北畠神社社務所"],["三重","田丸城","玉城町","村山龍平記念館"],["三重","赤木城","熊野市","紀和鉱山資料館"],["滋賀","鎌刃城","米原市","源右衛門/Cafe&Gallery「湖北の暮らし」"],["滋賀","八幡山城","近江八幡市","近江八幡市立資料館"],["京都","福知山城","福知山市","福知山城天守閣"],["大阪","芥川山城","高槻市","高槻市しろあと歴史館"],["大阪","飯盛城","大東市","大東市立歴史民俗資料館"],["大阪","岸和田城","岸和田市","岸和田城天守閣受付"],["兵庫","出石城","豊岡市","いずし観光センター"],["兵庫","黒井城","丹波市","春日住民センター"],["兵庫","洲本城","洲本市","洲本市立淡路文化史料館"],["奈良","大和郡山城","大和郡山市","柳沢文庫"],["奈良","宇陀松山城","宇陀市","まちづくりセンター千軒舎"],["和歌山","新宮城","新宮市","新宮市立歴史民俗資料館"],["鳥取","若桜鬼ヶ城","若桜町","若桜町観光案内所"],["鳥取","米子城","米子市","米子市立山陰歴史館"],["島根","浜田城","浜田市","浜田護国神社"],["岡山","備中高松城","岡山市","高松城址公園資料館"],["広島","三原城","三原市","三原観光協会"],["広島","新高山城","三原市","本郷生涯学習センター"],["山口","大内氏館","山口市","山口市歴史民俗資料館"],["徳島","勝瑞城","藍住町","勝瑞発掘現場事務所"],["徳島","一宮城","徳島市","徳島市立考古資料館"],["香川","引田城","東かがわ市","讃州井筒屋敷"],["愛媛","能島城","今治市","村上水軍博物館"],["愛媛","河後森城","松野町","河後森城跡西第十曲輪馬屋"],["高知","岡豊城","南国市","高知県立歴史民俗資料館"],["福岡","小倉城","北九州市","小倉城天守受付"],["福岡","水城","太宰府市","水城館"],["福岡","久留米城","久留米市","篠山神社社務所"],["佐賀","基肄城","基山町","基山町民会館"],["佐賀","唐津城","唐津市","唐津城天守閣1階"],["長崎","金田城","対馬市","美津島地区公民館"],["長崎","福江城","五島市","五島氏庭園"],["長崎","原城","南島原市","南島原市有馬キリシタン遺産記念館"],["熊本","鞠智城","山鹿市","温故創生館"],["熊本","八代城","八代市","八代市立博物館"],["大分","中津城","中津市","中津城天守閣"],["大分","角牟礼城","玖珠町","豊後森藩資料館"],["大分","臼杵城","臼杵市","臼杵市観光交流プラザ"],["大分","佐伯城","佐伯市","佐伯市歴史資料館"],["宮崎","延岡城","延岡市","延岡城・内藤記念博物館"],["宮崎","佐土原城","宮崎市","鶴松館"],["鹿児島","志布志城","志布志市","志布志市埋蔵文化財センター"],["鹿児島","知覧城","南九州市","ミュージアム知覧"],["沖縄","座喜味城","読谷村","ユンタンザミュージアム"],["沖縄","勝連城","うるま市","あまわりパーク・歴史文化施設"]];
+
+// マスターデータから県・市に該当する項目を抽出
+function lookupMaster(masterArray, q) {
+  var prefShort = q.replace(/[都道府県市町村区]$/, '');
+  var isPref = /[都道府県]$/.test(q);
+  var results = [];
+  masterArray.forEach(function(row) {
+    if (isPref) {
+      if (row[0] === prefShort || row[0] === q.replace(/[都道府]$/, '')) results.push(row);
+    } else {
+      // 市町村レベル: 県名or地区名に市名が含まれるか
+      var match = false;
+      for (var i = 0; i < row.length; i++) {
+        if (typeof row[i] === 'string' && row[i].indexOf(prefShort) >= 0) { match = true; break; }
+      }
+      if (match) results.push(row);
+    }
+  });
+  return results;
+}
+
+// 都道府県が「・」「,」区切りで複数指定されているケースに対応
+// ストーリー名や公園名にも市町村名が含まれる場合を考慮
+function lookupMasterMultiPref(masterArray, q) {
+  var prefShort = q.replace(/[都道府県市町村区]$/, '');
+  var results = [];
+  masterArray.forEach(function(row) {
+    var matched = false;
+    for (var i = 0; i < row.length; i++) {
+      if (typeof row[i] === 'string' && row[i].indexOf(prefShort) >= 0) { matched = true; break; }
+    }
+    if (matched) results.push(row);
+  });
+  return results;
+}
+
+// Gemini APIで地域情報レポートを生成
+var GEO_PROMPT = '以下の指示に従い、入力された地域について回答してください。出力はJSON形式のみで、マークダウンのコードブロックは不要です。\n\n'
+  + '【重要】確実に正しいと言える情報のみ回答してください。不確実な場合は該当なし（空配列）としてください。特に以下に注意：\n'
+  + '・日本遺産は文化庁が正式認定したストーリー名のみ。存在しない認定名を絶対に創作しないこと\n'
+  + '・著名人はWikipediaに記事が存在し、出身地が明記されている人物のみ。推測で出身地を割り当てないこと\n'
+  + '・以下は別途正確なデータを使用するため、すべて空配列にすること: 世界遺産(worldHeritage)、日本遺産(japanHeritage)、ジオパーク・国立公園(geopark)、重要伝統的建造物群保存地区(denken)、100名城(castle100)、続100名城(castle100cont)、山鉾屋台行事(yamahoko)、一の宮神社(ichinomiya)、出身の著名人(celeb)\n'
+  + '・県レベルの場合は県内すべての該当を網羅すること\n\n'
+  + '県名・自治体名が入力されたら、その地域にある以下項目について該当するものについて、名称及び簡潔な説明をセットにして返してください。該当がないものは空配列にしてください。\n\n'
+  + '・人口（2024年または2025年の最新の推計人口を使用すること。2020年以前のデータは不可。「2025年○月1日現在の推計人口は○○人」のように年月を必ず明記すること。不明なら「最新データなし」と回答）\n・世界遺産\n・日本遺産\n・ジオパークや国立公園\n・重要伝統的建造物群保存地区\n'
+  + '・ユネスコ無形文化遺産「山・鉾・屋台行事」\n・日本100名城（スタンプ設置場所及び設置時間も）\n'
+  + '・日本続100名城（スタンプ設置場所及び設置時間も）\n・一の宮神社\n・古代〜近世の街道\n'
+  + '・現在の話題のスポット\n・代表的な産業\n・名物料理（代表的な店名も）\n・出身の著名人\n'
+  + '・該当地域における代表的な行政施策\n・該当地域における最新トレンド情報\n\n'
+  + 'JSONスキーマ:\n'
+  + '{"population":"人口の説明文",'
+  + '"worldHeritage":[{"name":"名称","desc":"説明"}],'
+  + '"japanHeritage":[{"name":"名称","desc":"説明"}],'
+  + '"geopark":[{"name":"名称","desc":"説明"}],'
+  + '"denken":[{"name":"名称","desc":"説明"}],'
+  + '"yamahoko":[{"name":"名称","desc":"説明"}],'
+  + '"castle100":[{"name":"名称","desc":"説明","stamp":"スタンプ設置場所と設置時間"}],'
+  + '"castle100cont":[{"name":"名称","desc":"説明","stamp":"スタンプ設置場所と設置時間"}],'
+  + '"ichinomiya":[{"name":"名称","desc":"説明"}],'
+  + '"kaido":[{"name":"名称","desc":"説明"}],'
+  + '"spot":[{"name":"名称","desc":"説明"}],'
+  + '"industry":[{"name":"名称","desc":"説明"}],'
+  + '"food":[{"name":"名称","desc":"説明","shop":"代表的な店名"}],'
+  + '"celeb":[{"name":"名称","desc":"説明"}],'
+  + '"policy":[{"name":"名称","desc":"説明"}],'
+  + '"trend":[{"name":"名称","desc":"説明"}]}';
+
+// Gemini出力の各項目をWikipedia記事存在チェックで検証
+function verifyGeminiItems(geminiData, callback) {
+  if (!geminiData) { callback(geminiData); return; }
+  // 検証対象: 配列型のカテゴリで name を持つもの
+  var keysToCheck = ['japanHeritage','worldHeritage','geopark','denken','ichinomiya','celeb'];
+  var allChecks = [];
+
+  keysToCheck.forEach(function(key) {
+    var items = geminiData[key];
+    if (!Array.isArray(items)) return;
+    items.forEach(function(item, idx) {
+      if (!item.name) return;
+      allChecks.push(
+        fetch('https://ja.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(item.name))
+          .then(function(r) {
+            if (r.ok) return r.json().then(function(d) { item._verified = true; item._wikiDesc = d.extract ? d.extract.substring(0, 120) : ''; });
+            else item._verified = false;
+          })
+          .catch(function() { item._verified = false; })
+      );
+    });
+  });
+
+  Promise.all(allChecks).then(function() { callback(geminiData); });
+}
+
+function searchGeo(q) {
+  if (!ensureGeminiKey()) {
+    setStatus('Gemini APIキーが設定されていません。', true);
+    return;
+  }
+  setLoading('Gemini API + Wikipedia + 国土地理院で検索中…');
+  var results = {wiki: null, gsi: null, gemini: null, celebs: null, adjacent: null};
+  var doneTasks = 0;
+  var totalTasks = 5; // Gemini + Wikipedia概要 + GSI + Wikipedia著名人 + 隣接自治体
+
+  function taskDone() {
+    doneTasks++;
+    if (doneTasks >= totalTasks) {
+      // マスターデータでオーバーライド（公式ソースが正）
+      if (results.gemini) {
+        // 人口: Geminiの回答が古い場合、Wikipedia概要から補足
+        if (results.wiki && results.wiki.extract && results.gemini) {
+          var wikiPop = results.wiki.extract.match(/人口は?約?(\d[\d,万]+人)/);
+          if (wikiPop && results.gemini.population) {
+            var geminiHasYear = /20[12]\d年/.test(results.gemini.population);
+            var wikiPopText = wikiPop[0];
+            if (!geminiHasYear || /201\d年/.test(results.gemini.population)) {
+              results.gemini.population += '（※Wikipedia概要: ' + wikiPopText + '）';
+            }
+          }
+        }
+        // 世界遺産（文化庁公式）
+        var wh = lookupMasterMultiPref(WORLD_HERITAGE_MASTER, q);
+        results.gemini.worldHeritage = wh.map(function(r){return {name:r[1],desc:r[0]};});
+        // 日本遺産（文化庁公式）
+        var jh = lookupMasterMultiPref(JAPAN_HERITAGE_MASTER, q);
+        results.gemini.japanHeritage = jh.map(function(r){return {name:r[1],desc:r[0]};});
+        // ジオパーク・国立公園（環境省・日本ジオパーク委員会）
+        var gnp = lookupMasterMultiPref(GEOPARK_NP_MASTER, q);
+        results.gemini.geopark = gnp.map(function(r){return {name:r[1],desc:r[2]};});
+        // 重伝建（文化庁公式）
+        var dk = lookupMaster(DENKEN_MASTER, q);
+        results.gemini.denken = dk.map(function(r){return {name:r[1],desc:r[2]};});
+        // 100名城
+        var c100 = lookupMaster(CASTLE100_MASTER, q);
+        results.gemini.castle100 = c100.map(function(r){return {name:r[1],desc:r[2]?r[2]+'に所在':'',stamp:r[3]||'情報なし'};});
+        // 続100名城
+        var c100c = lookupMaster(CASTLE100C_MASTER, q);
+        results.gemini.castle100cont = c100c.map(function(r){return {name:r[1],desc:r[2]?r[2]+'に所在':'',stamp:r[3]||'情報なし'};});
+        // 山鉾屋台（文化庁公式PDF準拠）
+        // 山鉾屋台（文化庁公式PDF準拠）
+        var yama = lookupMaster(YAMAHOKO_MASTER, q);
+        results.gemini.yamahoko = yama.map(function(r){return {name:r[1],desc:'ユネスコ無形文化遺産「山・鉾・屋台行事」登録'};});
+        // 一宮神社（Wikipedia「一宮」記事準拠）
+        var ichi = lookupMaster(ICHINOMIYA_MASTER, q);
+        results.gemini.ichinomiya = ichi.map(function(r){return {name:r[1],desc:r[2]+'（'+r[3]+'）'};});
+        // 著名人（Wikipedia記事のセクションから取得）
+        if (results.celebs && results.celebs.length > 0) {
+          results.gemini.celeb = results.celebs;
+        }
+      }
+      // Gemini出力をWikipediaで検証
+      setLoading('ファクトチェック中…');
+      verifyGeminiItems(results.gemini, function(verified) {
+        clearLoading();
+        var combined = {query: q, wiki: results.wiki, gsi: results.gsi, gemini: verified, adjacent: results.adjacent};
+        if (!results.wiki && !results.gsi && !results.gemini) {
+          setStatus('情報が見つかりませんでした。');
+          document.getElementById('results').innerHTML = '';
+          return;
+        }
+        setStatus('');
+        searchCache['geo:' + q] = combined;
+        renderResults('geo', combined, q);
+      });
+    }
+  }
+
+  // 1. Gemini API で地域情報レポート生成
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + GEMINI_KEY, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      contents: [{parts: [{text: '「' + q + '」\n\n' + GEO_PROMPT}]}],
+      generationConfig: {maxOutputTokens: 8192, temperature: 0.2, responseMimeType: 'application/json'}
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(d) {
+    if (d.candidates && d.candidates[0] && d.candidates[0].content) {
+      var text = d.candidates[0].content.parts[0].text;
+      try { results.gemini = JSON.parse(text); } catch(e) {
+        // コードブロック除去してリトライ
+        text = text.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
+        try { results.gemini = JSON.parse(text); } catch(e2) {}
+      }
+    }
+    taskDone();
+  })
+  .catch(function(e){
+    console.error('Gemini API error:', e);
+    taskDone();
+  });
+
+  // 2. Wikipedia 概要（画像取得用）
+  fetch('https://ja.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(q))
+    .then(function(r){return r.ok ? r.json() : null;})
+    .then(function(d){results.wiki = d; taskDone();})
+    .catch(function(){
+      // 自治体名補完を試す
+      var suffixes = ['市','町','村','県','区'];
+      var tryNext = function(i) {
+        if (i >= suffixes.length || /[市町村県区]$/.test(q)) { taskDone(); return; }
+        fetch('https://ja.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(q + suffixes[i]))
+          .then(function(r){return r.ok ? r.json() : null;})
+          .then(function(d){ if(d){results.wiki=d; taskDone();} else tryNext(i+1); })
+          .catch(function(){tryNext(i+1);});
+      };
+      tryNext(0);
+    });
+
+  // 3. 国土地理院 地名検索 → 標高取得
+  fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(q))
+    .then(function(r){return r.json();})
+    .then(function(features) {
+      if (features && features.length > 0) {
+        var coords = features[0].geometry.coordinates;
+        var name = features[0].properties.title;
+        fetch('https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=' + coords[0] + '&lat=' + coords[1] + '&outtype=JSON')
+          .then(function(r){return r.json();})
+          .then(function(elev) {
+            results.gsi = {name: name, lng: coords[0], lat: coords[1], elevation: elev.elevation};
+            taskDone();
+          }).catch(function(){results.gsi = {name: name, lng: coords[0], lat: coords[1], elevation: null}; taskDone();});
+      } else { taskDone(); }
+    }).catch(function(){taskDone();});
+
+  // 4. Wikipedia記事から著名人セクションを取得
+  fetchCelebsFromWiki(q, function(celebs) {
+    results.celebs = celebs;
+    taskDone();
+  });
+
+  // 5. 隣接自治体をWikipedia記事のInfoboxから取得
+  fetchAdjacentFromWiki(q, function(adj) {
+    results.adjacent = adj;
+    taskDone();
+  });
+}
+
+// Wikipedia記事のInfoboxから隣接自治体を抽出
+function fetchAdjacentFromWiki(q, callback) {
+  var suffixes = /[市町村県区]$/.test(q) ? [q] : [q, q+'市', q+'町', q+'村', q+'県'];
+  var tried = 0;
+  function tryPage(name) {
+    fetch('https://ja.wikipedia.org/w/api.php?action=parse&page=' + encodeURIComponent(name) + '&prop=wikitext&format=json&origin=*')
+      .then(function(r){return r.json();})
+      .then(function(d) {
+        if (!d.parse || !d.parse.wikitext) {
+          tried++;
+          if (tried < suffixes.length) tryPage(suffixes[tried]);
+          else callback([]);
+          return;
+        }
+        var text = d.parse.wikitext['*'];
+        // 隣接自治体 = [[A]]、[[B]]... パターン
+        var adjMatch = text.match(/隣接自治体\s*=\s*([^\n]+)/);
+        if (!adjMatch) {
+          // 「隣接する自治体」セクション
+          adjMatch = text.match(/隣接する自治体[=\s]*\n([\s\S]{10,300}?)(?:\n[=|])/);
+        }
+        if (adjMatch) {
+          var adjText = adjMatch[1] || adjMatch[0];
+          var links = adjText.match(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g) || [];
+          var cities = [];
+          links.forEach(function(l) {
+            var m = l.match(/\[\[([^\]|]+)/);
+            if (m) {
+              var name = m[1];
+              // 郡名を除外、市町村区のみ
+              if (/[市町村区]$/.test(name) && cities.length < 15) {
+                cities.push(name);
+              }
+            }
+          });
+          callback(cities);
+        } else {
+          // 県レベル: 近隣県をGeminiに任せる代わりに、同じ地方の県を提案
+          if (/[都道府県]$/.test(name)) {
+            var REGION = {
+              '北海道':['青森県'],
+              '青森':['岩手県','秋田県','北海道'],
+              '岩手':['青森県','秋田県','宮城県'],
+              '宮城':['岩手県','秋田県','山形県','福島県'],
+              '秋田':['青森県','岩手県','宮城県','山形県'],
+              '山形':['秋田県','宮城県','福島県','新潟県'],
+              '福島':['宮城県','山形県','茨城県','栃木県','群馬県','新潟県'],
+              '茨城':['福島県','栃木県','埼玉県','千葉県'],
+              '栃木':['福島県','茨城県','群馬県','埼玉県'],
+              '群馬':['福島県','栃木県','埼玉県','新潟県','長野県'],
+              '埼玉':['茨城県','栃木県','群馬県','千葉県','東京都','山梨県'],
+              '千葉':['茨城県','埼玉県','東京都'],
+              '東京':['埼玉県','千葉県','神奈川県','山梨県'],
+              '神奈川':['東京都','千葉県','静岡県','山梨県'],
+              '新潟':['山形県','福島県','群馬県','長野県','富山県'],
+              '富山':['新潟県','長野県','石川県','岐阜県'],
+              '石川':['富山県','福井県','岐阜県'],
+              '福井':['石川県','岐阜県','滋賀県','京都府'],
+              '山梨':['埼玉県','東京都','神奈川県','長野県','静岡県'],
+              '長野':['群馬県','新潟県','富山県','岐阜県','静岡県','愛知県','山梨県'],
+              '岐阜':['富山県','石川県','福井県','長野県','愛知県','三重県','滋賀県'],
+              '静岡':['神奈川県','山梨県','長野県','愛知県'],
+              '愛知':['長野県','岐阜県','静岡県','三重県'],
+              '三重':['岐阜県','愛知県','滋賀県','京都府','奈良県','和歌山県'],
+              '滋賀':['福井県','岐阜県','三重県','京都府'],
+              '京都':['福井県','三重県','滋賀県','大阪府','兵庫県','奈良県'],
+              '大阪':['京都府','兵庫県','奈良県','和歌山県'],
+              '兵庫':['京都府','大阪府','鳥取県','岡山県'],
+              '奈良':['京都府','大阪府','三重県','和歌山県'],
+              '和歌山':['三重県','大阪府','奈良県'],
+              '鳥取':['兵庫県','島根県','岡山県','広島県'],
+              '島根':['鳥取県','広島県','山口県'],
+              '岡山':['兵庫県','鳥取県','広島県','香川県'],
+              '広島':['鳥取県','島根県','岡山県','山口県','愛媛県'],
+              '山口':['島根県','広島県','福岡県'],
+              '徳島':['香川県','愛媛県','高知県'],
+              '香川':['岡山県','徳島県','愛媛県'],
+              '愛媛':['広島県','徳島県','香川県','高知県'],
+              '高知':['徳島県','愛媛県'],
+              '福岡':['山口県','佐賀県','大分県','熊本県'],
+              '佐賀':['福岡県','長崎県'],
+              '長崎':['佐賀県'],
+              '熊本':['福岡県','大分県','宮崎県','鹿児島県'],
+              '大分':['福岡県','熊本県','宮崎県'],
+              '宮崎':['大分県','熊本県','鹿児島県'],
+              '鹿児島':['熊本県','宮崎県'],
+              '沖縄':['鹿児島県']
+            };
+            var prefKey = name.replace(/[都道府県]$/, '');
+            callback(REGION[prefKey] || []);
+          } else {
+            callback([]);
+          }
+        }
+      }).catch(function(){
+        tried++;
+        if (tried < suffixes.length) tryPage(suffixes[tried]);
+        else callback([]);
+      });
+  }
+  tryPage(suffixes[0]);
+}
+
+// Wikipedia記事の「出身著名人」セクションから人名を抽出
+function fetchCelebsFromWiki(q, callback) {
+  // 県レベルの場合: 「○○県出身の人物一覧」ページを参照
+  var isPref = /[都道府県]$/.test(q);
+  if (isPref) {
+    var listPage = q + '出身の人物一覧';
+    fetch('https://ja.wikipedia.org/w/api.php?action=parse&page=' + encodeURIComponent(listPage) + '&section=0&prop=wikitext&format=json&origin=*')
+      .then(function(r){return r.json();})
+      .then(function(d) {
+        if (!d.parse) { callback([]); return; }
+        // 一覧ページがある場合、冒頭のリンクを取得（代表的な人物）
+        var text = d.parse.wikitext ? d.parse.wikitext['*'] : '';
+        var people = [];
+        text.split('\n').forEach(function(line) {
+          var m = line.match(/^\*\s*\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/);
+          if (!m || people.length >= 20) return;
+          var name = m[2] || m[1];
+          if (/^(ファイル|File|Category):/.test(m[1])) return;
+          var desc = line.substring(m[0].length).trim()
+            .replace(/\[\[([^|\]]+\|)?([^\]]+)\]\]/g, '$2')
+            .replace(/<[^>]+>/g, '').replace(/'{2,}/g, '')
+            .replace(/^\s*[-—:：、（(]+\s*/, '').replace(/[）)]\s*$/, '');
+          if (name.length >= 2) people.push({name: name, desc: desc.substring(0, 100)});
+        });
+        // 冒頭にリストがない場合は最初のセクションも試す
+        if (people.length === 0) {
+          fetch('https://ja.wikipedia.org/w/api.php?action=parse&page=' + encodeURIComponent(listPage) + '&section=1&prop=wikitext&format=json&origin=*')
+            .then(function(r){return r.json();})
+            .then(function(d2) {
+              var text2 = d2.parse && d2.parse.wikitext ? d2.parse.wikitext['*'] : '';
+              text2.split('\n').forEach(function(line) {
+                var m = line.match(/^\*\s*\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/);
+                if (!m || people.length >= 20) return;
+                var name = m[2] || m[1];
+                if (/^(ファイル|File|Category):/.test(m[1])) return;
+                var desc = line.substring(m[0].length).trim()
+                  .replace(/\[\[([^|\]]+\|)?([^\]]+)\]\]/g, '$2')
+                  .replace(/<[^>]+>/g, '').replace(/'{2,}/g, '')
+                  .replace(/^\s*[-—:：、（(]+\s*/, '').replace(/[）)]\s*$/, '');
+                if (name.length >= 2) people.push({name: name, desc: desc.substring(0, 100)});
+              });
+              callback(people);
+            }).catch(function(){callback(people);});
+        } else {
+          callback(people);
+        }
+      }).catch(function(){callback([]);});
+    return;
+  }
+  // 市町村レベル: 記事の「著名な出身者」セクションを参照
+  var suffixes = /[市町村区]$/.test(q) ? [q] : [q, q+'市', q+'町', q+'村'];
+  var tried = 0;
+  function tryPage(name) {
+    fetch('https://ja.wikipedia.org/w/api.php?action=parse&page=' + encodeURIComponent(name) + '&prop=sections&format=json&origin=*')
+      .then(function(r){return r.json();})
+      .then(function(d) {
+        if (!d.parse || !d.parse.sections) {
+          tried++;
+          if (tried < suffixes.length) tryPage(suffixes[tried]);
+          else callback([]);
+          return;
+        }
+        // 著名人セクションを探す
+        var celebSection = null;
+        d.parse.sections.forEach(function(s) {
+          if (/著名.*出身|出身.*著名|出身者|ゆかり.*人物/.test(s.line) && !celebSection) {
+            celebSection = s;
+          }
+        });
+        if (!celebSection) { callback([]); return; }
+        // セクションのwikitextを取得
+        fetch('https://ja.wikipedia.org/w/api.php?action=parse&page=' + encodeURIComponent(name) + '&section=' + celebSection.index + '&prop=wikitext&format=json&origin=*')
+          .then(function(r){return r.json();})
+          .then(function(d2) {
+            var text = d2.parse && d2.parse.wikitext ? d2.parse.wikitext['*'] : '';
+            var people = [];
+            text.split('\n').forEach(function(line) {
+              var m = line.match(/^\*\s*\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/);
+              if (!m) return;
+              var name = m[2] || m[1];
+              if (/^(ファイル|File|Category):/.test(m[1])) return;
+              // 行の残りから説明を取得
+              var desc = line.substring(m[0].length).trim();
+              desc = desc.replace(/\[\[([^|\]]+\|)?([^\]]+)\]\]/g, '$2')
+                .replace(/<ref[^>]*>.*?<\/ref>/gs, '').replace(/<[^>]+>/g, '')
+                .replace(/'{2,}/g, '').replace(/^\s*[-—:：、（(]+\s*/, '').replace(/[）)]\s*$/, '');
+              if (name.length >= 2 && people.length < 20) {
+                people.push({name: name, desc: desc.substring(0, 100)});
+              }
+            });
+            callback(people);
+          }).catch(function(){callback([]);});
+      }).catch(function(){
+        tried++;
+        if (tried < suffixes.length) tryPage(suffixes[tried]);
+        else callback([]);
+      });
+  }
+  tryPage(suffixes[0]);
+}
+
+// ===== 4. 技術トレンド (GitHub API + npm Registry) =====
+function searchTech(q) {
+  setLoading('GitHub + npm で検索中…');
+  var results = {github: null, npm: null};
+  var done = 0;
+  function checkDone() {
+    done++;
+    if (done >= 2) {
+      clearLoading();
+      if (!results.github && !results.npm) {
+        setStatus('情報が見つかりませんでした。');
+        document.getElementById('results').innerHTML = '';
+        return;
+      }
+      var combined = {query: q, github: results.github, npm: results.npm};
+      setStatus('');
+      searchCache['tech:' + q] = combined;
+      renderResults('tech', combined, q);
+    }
+  }
+
+  // GitHub リポジトリ検索
+  fetch('https://api.github.com/search/repositories?q=' + encodeURIComponent(q) + '&sort=stars&order=desc&per_page=10')
+    .then(function(r){return r.json();})
+    .then(function(d){results.github = d; checkDone();})
+    .catch(function(){checkDone();});
+
+  // npm レジストリ検索
+  fetch('https://registry.npmjs.org/-/v1/search?text=' + encodeURIComponent(q) + '&size=5')
+    .then(function(r){return r.json();})
+    .then(function(d){results.npm = d; checkDone();})
+    .catch(function(){checkDone();});
+}
+
+// ===== レンダリング =====
+function renderResults(tab, data, query) {
+  var el = document.getElementById('results');
+  Object.keys(charts).forEach(function(k){try{charts[k].destroy();}catch(e){}});
+  charts = {};
+
+  if (tab === 'paper') renderPapers(el, data, query);
+  else if (tab === 'food') renderFood(el, data, query);
+  else if (tab === 'geo') renderGeo(el, data, query);
+  else if (tab === 'tech') renderTech(el, data, query);
+}
+
+// ---- 論文レンダリング ----
+// ---- 翻訳ヘルパー (MyMemory API) ----
+var transCache = {};
+function translateToJa(text) {
+  if (!text) return Promise.resolve('');
+  var short = text.substring(0, 450); // API制限500文字
+  if (transCache[short]) return Promise.resolve(transCache[short]);
+  return fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(short) + '&langpair=en|ja')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var t = d.responseData ? d.responseData.translatedText : '';
+      transCache[short] = t;
+      return t;
+    })
+    .catch(function(){return '';});
+}
+
+function renderPapers(el, papers, query) {
+  // 年別集計チャート
+  var yearCounts = {};
+  papers.forEach(function(p){if(p.year){yearCounts[p.year]=(yearCounts[p.year]||0)+1;}});
+  var years = Object.keys(yearCounts).sort();
+
+  var html = '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:8px;">年別分布</div>'
+    + '<div class="chart-wrap" style="height:180px;"><canvas id="paperYearChart"></canvas></div></div>';
+
+  // 被引用数でソート
+  var sorted = papers.slice().sort(function(a,b){return (b.citationCount||0)-(a.citationCount||0);});
+
+  sorted.forEach(function(p, idx) {
+    var authors = (p.authors||[]).slice(0,3).map(function(a){return a.name;}).join(', ');
+    if (p.authors && p.authors.length > 3) authors += ' et al.';
+    var pdfLink = p.openAccessPdf ? ' <a href="'+p.openAccessPdf.url+'" target="_blank" style="font-size:11px;color:var(--good);">[PDF]</a>' : '';
+    html += '<div class="result-item">'
+      + '<div class="r-title"><a href="'+p.url+'" target="_blank">'+esc(p.title)+'</a>'+pdfLink+'</div>'
+      + '<div id="paper-title-ja-'+idx+'" style="font-size:12px;color:var(--sub);margin-bottom:4px;"></div>'
+      + '<div class="r-meta">'+authors+' ('+( p.year||'?')+') &middot; 被引用数: <strong>'+(p.citationCount||0).toLocaleString()+'</strong></div>'
+      + '<div class="r-body">'+(p.abstract ? esc(p.abstract).substring(0,300)+'…' : '<em>要旨なし</em>')+'</div>'
+      + '<div id="paper-abs-ja-'+idx+'" style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.8;border-left:2px solid var(--border);padding-left:8px;"></div>';
+    if (p.fieldsOfStudy && p.fieldsOfStudy.length) {
+      html += '<div class="r-tags">' + p.fieldsOfStudy.map(function(f){return '<span>'+esc(f)+'</span>';}).join('') + '</div>';
+    }
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+
+  // 非同期で日本語訳を追加（レート制限回避のため順次実行）
+  var translateQueue = sorted.map(function(p, idx){return {title: p.title, abstract: p.abstract, idx: idx};});
+  var tIdx = 0;
+  function translateNext() {
+    if (tIdx >= translateQueue.length) return;
+    var item = translateQueue[tIdx];
+    tIdx++;
+    // タイトル翻訳
+    translateToJa(item.title).then(function(ja) {
+      var titleEl = document.getElementById('paper-title-ja-' + item.idx);
+      if (titleEl && ja) titleEl.textContent = ja;
+      // 要旨翻訳（あれば）
+      if (item.abstract) {
+        return translateToJa(item.abstract.substring(0, 400)).then(function(jaAbs) {
+          var absEl = document.getElementById('paper-abs-ja-' + item.idx);
+          if (absEl && jaAbs) absEl.textContent = jaAbs;
+        });
+      }
+    }).then(function() {
+      // 次の論文を少し遅延して翻訳（レート制限対策）
+      setTimeout(translateNext, 300);
+    }).catch(function() {
+      setTimeout(translateNext, 500);
+    });
+  }
+  translateNext();
+
+  // チャート描画
+  if (years.length >= 2) {
+    charts.paperYear = new Chart(document.getElementById('paperYearChart'), {
+      type:'bar',
+      data:{labels:years, datasets:[{label:'論文数',data:years.map(function(y){return yearCounts[y];}),
+        backgroundColor:'rgba(46,204,113,0.5)',borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+    });
+  }
+}
+
+// ---- 食品レンダリング ----
+function renderFood(el, foods, query) {
+  // 1件目の詳細栄養表示
+  var first = foods[0];
+  var nutrients = {};
+  var TARGET_NUTRIENTS = {
+    1008:'エネルギー', 1003:'タンパク質', 1004:'脂質', 1005:'炭水化物', 1079:'食物繊維',
+    1087:'カルシウム', 1089:'鉄', 1090:'マグネシウム', 1092:'カリウム', 1162:'ビタミンC',
+    1106:'ビタミンA', 1109:'ビタミンE', 1114:'ビタミンD', 1175:'ビタミンB6', 1178:'ビタミンB12',
+    1177:'葉酸', 1093:'ナトリウム', 1095:'亜鉛'
+  };
+  if (first.foodNutrients) {
+    first.foodNutrients.forEach(function(n) {
+      if (TARGET_NUTRIENTS[n.nutrientId]) {
+        nutrients[TARGET_NUTRIENTS[n.nutrientId]] = {value: n.value, unit: n.unitName || ''};
+      }
+    });
+  }
+
+  // 日本語の推奨量（100gあたり比較の参考値/日）
+  var DV = {'エネルギー':2000,'タンパク質':60,'脂質':65,'炭水化物':300,'食物繊維':21,
+    'カルシウム':800,'鉄':7.5,'マグネシウム':340,'カリウム':2500,'ビタミンC':100,
+    'ビタミンA':850,'ビタミンE':6,'ビタミンD':8.5,'ビタミンB6':1.3,'ビタミンB12':2.4,
+    '葉酸':240,'ナトリウム':2000,'亜鉛':10};
+
+  var html = '<div class="card">';
+  html += '<div style="font-size:15px;font-weight:bold;color:var(--accent);margin-bottom:4px;">'+esc(first.description)+'</div>';
+  html += '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">100gあたりの栄養素（日本人の推奨量に対する充足率）</div>';
+
+  var order = ['エネルギー','タンパク質','脂質','炭水化物','食物繊維','カルシウム','鉄','マグネシウム',
+    'カリウム','ビタミンC','ビタミンA','ビタミンE','ビタミンD','ビタミンB6','ビタミンB12','葉酸','ナトリウム','亜鉛'];
+  var chartLabels = [], chartVals = [];
+
+  order.forEach(function(name) {
+    var n = nutrients[name];
+    if (!n) return;
+    var pct = DV[name] ? Math.min(Math.round(n.value / DV[name] * 100), 200) : 0;
+    var color = pct >= 30 ? 'var(--good)' : pct >= 10 ? 'var(--warn)' : 'var(--muted)';
+    html += '<div class="nutri-bar">'
+      + '<div class="n-label">'+name+'</div>'
+      + '<div class="n-track"><div class="n-fill" style="width:'+Math.min(pct,100)+'%;background:'+color+'"></div></div>'
+      + '<div class="n-val">'+n.value.toFixed(1)+' '+n.unit+' ('+pct+'%)</div></div>';
+    if (name !== 'エネルギー') { chartLabels.push(name); chartVals.push(Math.min(pct, 150)); }
+  });
+  html += '<div class="chart-wrap" style="height:280px;margin-top:14px;"><canvas id="nutriRadar"></canvas></div>';
+  html += '</div>';
+
+  // 他の候補
+  if (foods.length > 1) {
+    html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:8px;">その他の候補</div>';
+    foods.slice(1).forEach(function(f) {
+      var cal = '', prot = '';
+      if (f.foodNutrients) {
+        f.foodNutrients.forEach(function(n) {
+          if (n.nutrientId === 1008) cal = n.value.toFixed(0) + ' kcal';
+          if (n.nutrientId === 1003) prot = n.value.toFixed(1) + 'g protein';
+        });
+      }
+      html += '<div class="result-item">'
+        + '<div class="r-title">'+esc(f.description)+'</div>'
+        + '<div class="r-meta">'+[cal,prot].filter(Boolean).join(' / ')+'</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+
+  // レーダーチャート
+  if (chartLabels.length >= 3) {
+    charts.nutriRadar = new Chart(document.getElementById('nutriRadar'), {
+      type:'radar',
+      data:{labels:chartLabels, datasets:[{label:'充足率(%)',data:chartVals,
+        backgroundColor:'rgba(46,204,113,0.15)',borderColor:'rgba(46,204,113,0.7)',
+        pointBackgroundColor:'rgba(46,204,113,0.9)',pointRadius:3,borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        scales:{r:{beginAtZero:true,max:150,ticks:{stepSize:50,font:{size:10}},
+          pointLabels:{font:{size:11}}}},
+        plugins:{legend:{display:false}}}
+    });
+  }
+}
+
+// ---- 地名レンダリング ----
+function renderGeo(el, data, query) {
+  var html = '';
+  var g = data.gemini || {};
+
+  // 基本情報カード（Wikipedia + 国土地理院）
+  html += '<div class="card">';
+  if (data.wiki) {
+    html += '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">';
+    if (data.wiki.thumbnail) {
+      html += '<img src="'+data.wiki.thumbnail.source+'" style="max-width:200px;max-height:200px;border-radius:8px;object-fit:cover;">';
+    }
+    html += '<div style="flex:1;min-width:200px;">';
+    html += '<div style="font-size:16px;font-weight:bold;color:var(--accent);margin-bottom:6px;">'+esc(data.wiki.title)+'</div>';
+    html += '<div style="font-size:13px;line-height:1.9;color:var(--sub);">'+esc(data.wiki.extract || '')+'</div>';
+    if (data.wiki.content_urls) {
+      html += '<div style="margin-top:8px;"><a href="'+data.wiki.content_urls.desktop.page+'" target="_blank" style="font-size:12px;color:var(--info);">Wikipedia で詳しく見る</a></div>';
+    }
+    html += '</div></div>';
+  }
+  if (data.gsi) {
+    html += '<div class="geo-grid" style="margin-top:14px;">';
+    html += '<div class="geo-box"><div class="g-val">'+data.gsi.lat.toFixed(4)+'N</div><div class="g-lbl">緯度</div></div>';
+    html += '<div class="geo-box"><div class="g-val">'+data.gsi.lng.toFixed(4)+'E</div><div class="g-lbl">経度</div></div>';
+    if (data.gsi.elevation !== null && data.gsi.elevation !== '-----') {
+      html += '<div class="geo-box"><div class="g-val">'+data.gsi.elevation+'m</div><div class="g-lbl">標高</div></div>';
+    }
+    html += '</div>';
+    html += '<div style="margin-top:8px;"><a href="https://maps.gsi.go.jp/#14/'+data.gsi.lat+'/'+data.gsi.lng+'/" target="_blank" style="font-size:12px;color:var(--info);">国土地理院地図で開く</a></div>';
+  }
+  html += '</div>';
+
+  // Gemini 地域情報レポート
+  if (!g || Object.keys(g).length === 0) {
+    html += '<div class="card"><div class="no-result">地域情報を取得できませんでした</div></div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  var ORDER = ['population','worldHeritage','japanHeritage','geopark','denken','yamahoko',
+    'castle100','castle100cont','ichinomiya','kaido','spot',
+    'industry','food','celeb','policy','trend'];
+  var LABELS = {
+    population:'人口', worldHeritage:'世界遺産', japanHeritage:'日本遺産',
+    geopark:'ジオパーク・国立公園', denken:'重要伝統的建造物群保存地区',
+    yamahoko:'ユネスコ無形文化遺産 山・鉾・屋台行事',
+    castle100:'日本100名城', castle100cont:'続日本100名城', ichinomiya:'一の宮神社',
+    kaido:'古代〜近世の街道', spot:'話題のスポット', industry:'代表的な産業',
+    food:'名物料理', celeb:'出身の著名人', policy:'行政施策', trend:'最新トレンド'
+  };
+  var COLORS = {
+    population:'var(--info)', worldHeritage:'var(--accent2)', japanHeritage:'var(--accent2)',
+    geopark:'var(--good)', denken:'var(--warn)', yamahoko:'var(--bad)',
+    castle100:'var(--info)', castle100cont:'var(--info)', ichinomiya:'var(--accent)',
+    kaido:'var(--sub)', spot:'var(--accent2)', industry:'var(--muted)',
+    food:'var(--warn)', celeb:'var(--info)', policy:'var(--good)', trend:'var(--accent)'
+  };
+
+  html += '<div class="card">';
+  html += '<div style="font-size:15px;font-weight:bold;color:var(--accent);margin-bottom:14px;">地域情報レポート — '+esc(query)+'</div>';
+
+  ORDER.forEach(function(key) {
+    var label = LABELS[key] || key;
+    var color = COLORS[key] || 'var(--accent)';
+    var val = g[key];
+
+    html += '<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;background:var(--hover);border-left:3px solid '+color+';">';
+    html += '<div style="font-size:13px;font-weight:bold;color:'+color+';margin-bottom:4px;">'+esc(label)+'</div>';
+
+    if (key === 'population' && typeof val === 'string' && val.length > 0) {
+      // 人口: テキスト表示
+      html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;padding:6px 8px;background:var(--card);border-radius:6px;">'+esc(val)+'</div>';
+    } else if (Array.isArray(val) && val.length > 0) {
+      // 配列: 各項目を表示
+      val.forEach(function(item) {
+        html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;margin:4px 0;padding:6px 8px;background:var(--card);border-radius:6px;">';
+        html += '<strong style="color:var(--text);">'+esc(item.name || '')+'</strong>';
+        // 検証バッジ
+        if (item._verified === true) html += ' <span style="font-size:10px;color:var(--good);" title="Wikipedia記事で確認済">&#10003;</span>';
+        else if (item._verified === false) html += ' <span style="font-size:10px;color:var(--warn);" title="Wikipedia記事が見つかりません（要確認）">&#9888;</span>';
+        if (item.desc) html += ' — ' + esc(item.desc);
+        if (item._wikiDesc) html += '<br><span style="font-size:11px;color:var(--muted);font-style:italic;">Wikipedia: '+esc(item._wikiDesc)+'</span>';
+        if (item.stamp) html += '<br><span style="font-size:11px;color:var(--info);">スタンプ: '+esc(item.stamp)+'</span>';
+        if (item.shop) html += '<br><span style="font-size:11px;color:var(--warn);">代表的な店: '+esc(item.shop)+'</span>';
+        html += '</div>';
+      });
+    } else {
+      html += '<div style="font-size:12px;color:var(--muted);padding:4px 0;">該当なし</div>';
+    }
+    html += '</div>';
+  });
+
+  html += '<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:right;">'
+    + '<span style="color:var(--good);">&#10003;</span>=Wikipedia確認済　'
+    + '<span style="color:var(--warn);">&#9888;</span>=要確認　'
+    + 'マスターデータ=公式ソース準拠　'
+    + '｜Powered by Gemini API</div>';
+  html += '</div>';
+
+  // 関連地域サジェスト
+  if (data.adjacent && data.adjacent.length > 0) {
+    html += '<div class="card">';
+    html += '<div style="font-size:14px;font-weight:bold;color:var(--accent);margin-bottom:10px;">関連地域を調べる</div>';
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    data.adjacent.forEach(function(city) {
+      html += '<button onclick="document.getElementById(\'searchInput\').value=\''+esc(city)+'\';doSearch();" '
+        + 'style="font-size:12px;padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--accent);cursor:pointer;transition:all 0.2s;"'
+        + ' onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'
+        + esc(city) + '</button>';
+    });
+    html += '</div></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ---- 技術トレンド レンダリング ----
+function renderTech(el, data, query) {
+  var html = '';
+
+  // GitHub リポジトリ
+  if (data.github && data.github.items && data.github.items.length > 0) {
+    var repos = data.github.items;
+
+    // Stars チャート
+    html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:8px;">GitHub Stars 比較</div>'
+      + '<div class="chart-wrap" style="height:220px;"><canvas id="techStarsChart"></canvas></div></div>';
+
+    html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:8px;">GitHub リポジトリ (Stars順)</div>';
+    repos.forEach(function(r) {
+      var lang = r.language ? '<span style="color:var(--accent2);">'+esc(r.language)+'</span> &middot; ' : '';
+      var updated = r.updated_at ? r.updated_at.substring(0,10) : '';
+      html += '<div class="result-item">'
+        + '<div class="r-title"><a href="'+r.html_url+'" target="_blank">'+esc(r.full_name)+'</a></div>'
+        + '<div class="r-meta">'+lang+'<span class="stars">'+r.stargazers_count.toLocaleString()+' stars</span>'
+        + ' &middot; '+r.forks_count.toLocaleString()+' forks'
+        + ' &middot; Issues: '+r.open_issues_count.toLocaleString()
+        + ' &middot; Updated: '+updated+'</div>'
+        + '<div class="r-body">'+esc(r.description||'')+'</div>';
+      if (r.topics && r.topics.length) {
+        html += '<div class="r-tags">' + r.topics.slice(0,8).map(function(t){return '<span>'+esc(t)+'</span>';}).join('') + '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // npm パッケージ
+  if (data.npm && data.npm.objects && data.npm.objects.length > 0) {
+    html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:8px;">npm パッケージ</div>';
+    data.npm.objects.forEach(function(obj) {
+      var p = obj.package;
+      var score = obj.score;
+      var popularity = score && score.detail ? Math.round((score.detail.popularity||0)*100) : 0;
+      var quality = score && score.detail ? Math.round((score.detail.quality||0)*100) : 0;
+      var maintenance = score && score.detail ? Math.round((score.detail.maintenance||0)*100) : 0;
+      html += '<div class="result-item" style="border-left-color:var(--bad);">'
+        + '<div class="r-title"><a href="'+p.links.npm+'" target="_blank">'+esc(p.name)+'</a> <span style="font-size:11px;color:var(--muted);">v'+esc(p.version)+'</span></div>'
+        + '<div class="r-meta">by '+esc((p.publisher&&p.publisher.username)||'?')+' &middot; '+p.date.substring(0,10)+'</div>'
+        + '<div class="r-body">'+esc(p.description||'')+'</div>'
+        + '<div style="display:flex;gap:12px;margin-top:6px;font-size:11px;">'
+        + '<span style="color:var(--accent);">人気: '+popularity+'%</span>'
+        + '<span style="color:var(--info);">品質: '+quality+'%</span>'
+        + '<span style="color:var(--warn);">保守: '+maintenance+'%</span>'
+        + '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+
+  // Stars バーチャート
+  if (data.github && data.github.items && data.github.items.length > 0) {
+    var top = data.github.items.slice(0, 8);
+    charts.techStars = new Chart(document.getElementById('techStarsChart'), {
+      type:'bar',
+      data:{
+        labels:top.map(function(r){return r.full_name.split('/')[1]||r.full_name;}),
+        datasets:[{label:'Stars',data:top.map(function(r){return r.stargazers_count;}),
+          backgroundColor:'rgba(240,168,64,0.6)',borderRadius:4}]
+      },
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{x:{ticks:{callback:function(v){return v>=1000?(v/1000)+'k':v;}}}}}
+    });
+  }
+}
+
+// ===== ユーティリティ =====
+function esc(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ===== 初期化 =====
+initTabs();
+</script>
+</body>
+</html>
