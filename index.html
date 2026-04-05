@@ -70,6 +70,7 @@ h1 small { font-size:12px; color:var(--muted); font-weight:normal; }
 .suggest { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
 .suggest button { font-size:11px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--sub); cursor:pointer; }
 .suggest button:hover { border-color:var(--accent); color:var(--accent); }
+.suggest span { display:block; width:100%; margin-top:6px; }
 
 /* テーマトグル */
 #themeToggle {
@@ -133,7 +134,9 @@ var CATEGORIES = [
   {id:'geo', label:'地名・歴史', icon:'', placeholder:'例: 川越, 鎌倉, 京都',
     suggestions:['川越','鎌倉','京都','長崎','金沢','奈良','広島']},
   {id:'tech', label:'技術トレンド', icon:'', placeholder:'例: react, rust, deno',
-    suggestions:['react','vue','svelte','rust','deno','bun','htmx','tailwindcss']}
+    suggestions:['react','vue','svelte','rust','deno','bun','htmx','tailwindcss']},
+  {id:'stock', label:'高配当株', icon:'', placeholder:'業種タグをクリック、または自由入力で検索',
+    suggestions:[], stockSectors: true}
 ];
 
 var currentTab = 'paper';
@@ -164,10 +167,127 @@ function initTabs() {
   document.getElementById('searchInput').placeholder = CATEGORIES[0].placeholder;
 }
 
+// 時価総額規模
+var STOCK_SIZES = [
+  {id:'all', label:'全規模'},
+  {id:'large', label:'大型株', desc:'TOPIX100相当・時価総額上位の大企業'},
+  {id:'mid', label:'中型株', desc:'TOPIX Mid400相当・中堅企業'},
+  {id:'small', label:'小型株', desc:'TOPIX Small相当・小型〜中小型企業'}
+];
+var currentStockSize = 'all';
+
+// 業種タグ定義（景気敏感 / ディフェンシブ分類）
+var STOCK_SECTORS = [
+  // ディフェンシブ（景気に左右されにくい）
+  {type:'defensive', label:'通信', query:'通信業'},
+  {type:'defensive', label:'電力・ガス', query:'電気ガス業'},
+  {type:'defensive', label:'食品', query:'食料品業'},
+  {type:'defensive', label:'医薬品', query:'医薬品業'},
+  {type:'defensive', label:'鉄道・インフラ', query:'陸運業 鉄道'},
+  {type:'defensive', label:'保険', query:'保険業'},
+  {type:'defensive', label:'日用品', query:'日用品 消費財'},
+  {type:'defensive', label:'リース', query:'リース業'},
+  {type:'defensive', label:'REIT', query:'REIT 不動産投資信託'},
+  // 景気敏感
+  {type:'cyclical', label:'商社', query:'卸売業 総合商社'},
+  {type:'cyclical', label:'銀行', query:'銀行業'},
+  {type:'cyclical', label:'証券', query:'証券業'},
+  {type:'cyclical', label:'不動産', query:'不動産業'},
+  {type:'cyclical', label:'鉄鋼', query:'鉄鋼業'},
+  {type:'cyclical', label:'化学', query:'化学業'},
+  {type:'cyclical', label:'自動車', query:'自動車 輸送用機器'},
+  {type:'cyclical', label:'機械', query:'機械業'},
+  {type:'cyclical', label:'電機', query:'電気機器'},
+  {type:'cyclical', label:'海運', query:'海運業'},
+  {type:'cyclical', label:'建設', query:'建設業'},
+];
+
 function renderSuggestions() {
   var cat = CATEGORIES.find(function(c){return c.id===currentTab;});
   var el = document.getElementById('suggest');
   el.innerHTML = '';
+
+  if (cat.stockSectors) {
+    // 規模選択
+    var sizeRow = document.createElement('div');
+    sizeRow.style.cssText = 'display:flex;align-items:center;gap:4px;width:100%;margin-bottom:6px;';
+    var sizeLabel = document.createElement('span');
+    sizeLabel.style.cssText = 'font-size:11px;color:var(--muted);font-weight:bold;min-width:32px;';
+    sizeLabel.textContent = '規模:';
+    sizeRow.appendChild(sizeLabel);
+    STOCK_SIZES.forEach(function(sz) {
+      var btn = document.createElement('button');
+      btn.textContent = sz.label;
+      btn.id = 'sz-' + sz.id;
+      if (sz.id === currentStockSize) btn.style.cssText = 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold;';
+      btn.onclick = function() {
+        currentStockSize = sz.id;
+        // ボタン状態更新
+        STOCK_SIZES.forEach(function(s2){
+          var b = document.getElementById('sz-'+s2.id);
+          if(b) b.style.cssText = s2.id===currentStockSize ? 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold;' : '';
+        });
+      };
+      if (sz.desc) btn.title = sz.desc;
+      sizeRow.appendChild(btn);
+    });
+    el.appendChild(sizeRow);
+
+    // 全業種ボタン
+    var allRow = document.createElement('div');
+    allRow.style.cssText = 'width:100%;margin-bottom:4px;';
+    var allBtn = document.createElement('button');
+    allBtn.textContent = '全業種でスクリーニング';
+    allBtn.style.cssText = 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:bold;padding:8px 20px;';
+    allBtn.onclick = function() {
+      document.getElementById('searchInput').value = '全業種';
+      doSearch();
+    };
+    allRow.appendChild(allBtn);
+    el.appendChild(allRow);
+
+    // ディフェンシブ
+    var defRow = document.createElement('div');
+    defRow.style.cssText = 'display:flex;align-items:center;gap:4px;width:100%;flex-wrap:wrap;margin-bottom:4px;';
+    var defLabel = document.createElement('span');
+    defLabel.style.cssText = 'font-size:10px;color:var(--info);font-weight:bold;min-width:80px;padding:3px 6px;background:rgba(41,128,185,0.1);border-radius:4px;text-align:center;';
+    defLabel.textContent = 'ディフェンシブ';
+    defRow.appendChild(defLabel);
+    STOCK_SECTORS.forEach(function(sec) {
+      if (sec.type !== 'defensive') return;
+      var btn = document.createElement('button');
+      btn.textContent = sec.label;
+      btn.style.cssText = 'border-color:var(--info);color:var(--info);';
+      btn.onclick = function() {
+        document.getElementById('searchInput').value = sec.query;
+        doSearch();
+      };
+      defRow.appendChild(btn);
+    });
+    el.appendChild(defRow);
+
+    // 景気敏感
+    var cycRow = document.createElement('div');
+    cycRow.style.cssText = 'display:flex;align-items:center;gap:4px;width:100%;flex-wrap:wrap;margin-bottom:4px;';
+    var cycLabel = document.createElement('span');
+    cycLabel.style.cssText = 'font-size:10px;color:var(--accent2);font-weight:bold;min-width:80px;padding:3px 6px;background:rgba(232,149,46,0.1);border-radius:4px;text-align:center;';
+    cycLabel.textContent = '景気敏感';
+    cycRow.appendChild(cycLabel);
+    STOCK_SECTORS.forEach(function(sec) {
+      if (sec.type !== 'cyclical') return;
+      var btn = document.createElement('button');
+      btn.textContent = sec.label;
+      btn.style.cssText = 'border-color:var(--accent2);color:var(--accent2);';
+      btn.onclick = function() {
+        document.getElementById('searchInput').value = sec.query;
+        doSearch();
+      };
+      cycRow.appendChild(btn);
+    });
+    el.appendChild(cycRow);
+    return;
+  }
+
   cat.suggestions.forEach(function(s) {
     var btn = document.createElement('button');
     btn.textContent = s;
@@ -183,12 +303,12 @@ function renderSuggestions() {
 function doSearch() {
   var q = document.getElementById('searchInput').value.trim();
   if (!q) return;
-  var cacheKey = currentTab + ':' + q;
+  var cacheKey = currentTab + ':' + (currentTab === 'stock' ? currentStockSize + ':' : '') + q;
   if (searchCache[cacheKey]) {
     renderResults(currentTab, searchCache[cacheKey], q);
     return;
   }
-  var fns = {paper: searchPapers, food: searchFood, geo: searchGeo, tech: searchTech};
+  var fns = {paper: searchPapers, food: searchFood, geo: searchGeo, tech: searchTech, stock: searchStock};
   fns[currentTab](q);
 }
 
@@ -844,6 +964,7 @@ function renderResults(tab, data, query) {
   else if (tab === 'food') renderFood(el, data, query);
   else if (tab === 'geo') renderGeo(el, data, query);
   else if (tab === 'tech') renderTech(el, data, query);
+  else if (tab === 'stock') renderStock(el, data, query);
 }
 
 // ---- 論文レンダリング ----
@@ -1199,6 +1320,320 @@ function renderTech(el, data, query) {
       options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:false}},
         scales:{x:{ticks:{callback:function(v){return v>=1000?(v/1000)+'k':v;}}}}}
+    });
+  }
+}
+
+// ===== 5. 高配当株リサーチ (Gemini API) =====
+var STOCK_PROMPT = '以下の条件でスクリーニングし、条件を満たす日本株の高配当銘柄をJSONオブジェクトで出力してください。\n\n'
+  + '【重要ルール】\n'
+  + '・確実に存在する上場銘柄のみ（架空の銘柄は絶対に作らない）\n'
+  + '・過去10年の実績データに基づいて各項目を判定すること\n'
+  + '・判定が不確実な項目は「不明」と回答すること\n'
+  + '・最大10銘柄まで\n\n'
+  + '【前提条件（これを満たさない銘柄は最初から除外すること）】\n'
+  + '・配当利回りが3%以上であること（3%未満は対象外）\n'
+  + '・EPS（一株利益）が過去10年で右肩上がりであること（EPSが横ばいまたは下落傾向の銘柄は対象外）\n\n'
+  + '【スクリーニング条件（全項目を過去10年で判定）】\n'
+  + '＜業績＞\n'
+  + '①売上・収益の推移 → 右肩上がりか？\n'
+  + '②ROE（自己資本利益率） → 8%を超えているか？\n'
+  + '③営業利益率 → 10%以上か？\n'
+  + '④EPS（一株利益） → 右肩上がりか？\n'
+  + '⑤営業CF → 毎年黒字か？\n'
+  + '＜配当＞\n'
+  + '⑥一株配当 → 右肩上がりか？\n'
+  + '⑦配当性向 → 30〜50%の範囲内か？\n'
+  + '＜財務＞\n'
+  + '⑧自己資本比率 → 40%以上か？\n'
+  + '⑨現金等 → 右肩上がりか？\n\n'
+  + '【購入タイミング判定】\n'
+  + 'スクリーニング通過銘柄について、以下を判定すること:\n'
+  + '・直近の株価\n'
+  + '・PER → 業種平均と比較して割安/適正/割高\n'
+  + '・PBR → 1倍以下なら割安、1〜1.5倍なら適正、1.5倍超なら割高\n'
+  + '・配当利回り → 過去平均と比較して魅力的/普通/低い\n'
+  + '・直近の月足高値からの下落率 → 何%下落しているか\n'
+  + '・下落率20%以上なら「割安圏」、10-20%なら「普通」、10%未満なら「高値圏」\n'
+  + '・以上を総合して「買い時」「様子見」「待ち」を判定\n\n'
+  + 'JSONスキーマ:\n'
+  + '{"stocks":[{"code":"証券コード","name":"銘柄名","sector":"業種","yield":"配当利回り(%)","pbr":"PBR",'
+  + '"checks":{"revenue":{"pass":true/false,"note":"判定理由"},"roe":{"pass":true/false,"value":"直近ROE%","note":"理由"},'
+  + '"opMargin":{"pass":true/false,"value":"直近営業利益率%","note":"理由"},"eps":{"pass":true/false,"note":"理由"},'
+  + '"opCF":{"pass":true/false,"note":"理由"},"dps":{"pass":true/false,"note":"理由"},'
+  + '"payout":{"pass":true/false,"value":"直近配当性向%","note":"理由"},'
+  + '"equityRatio":{"pass":true/false,"value":"直近自己資本比率%","note":"理由"},'
+  + '"cash":{"pass":true/false,"note":"理由"}},'
+  + '"verdict":"buy/hold/avoid","verdictReason":"総合判定理由",'
+  + '"timing":{"price":"直近株価(円)","per":"PER(倍)","perJudge":"割安/適正/割高","pbr":"PBR(倍)","pbrJudge":"割安/適正/割高",'
+  + '"yield":"配当利回り(%)","yieldJudge":"魅力的/普通/低い",'
+  + '"highPrice":"直近月足高値(円)","dropPct":"高値からの下落率(%)","dropJudge":"割安圏/普通/高値圏",'
+  + '"timingVerdict":"買い時/様子見/待ち","timingReason":"購入タイミング判定理由"}}]}';
+
+function searchStock(q) {
+  if (!ensureGeminiKey()) {
+    setStatus('Gemini APIキーが設定されていません。', true);
+    return;
+  }
+  setLoading('Gemini API でスクリーニング中（10項目判定）…');
+
+  var sizeDesc = '';
+  if (currentStockSize === 'large') sizeDesc = '時価総額規模: 大型株（TOPIX100構成銘柄レベル、時価総額1兆円以上クラス）に限定してください。';
+  else if (currentStockSize === 'mid') sizeDesc = '時価総額規模: 中型株（TOPIX Mid400レベル、時価総額1000億〜1兆円クラス）に限定してください。大型株（メガバンク、総合商社等の超大手）は除外。';
+  else if (currentStockSize === 'small') sizeDesc = '時価総額規模: 小型株（TOPIX Smallレベル、時価総額1000億円未満）に限定してください。大型・中型株は除外。';
+  else sizeDesc = '時価総額規模: 制限なし（大型・中型・小型すべて対象）。';
+
+  var sectorNote = q === '全業種' ? '業種を問わず、日本株全体から条件を満たす優良高配当銘柄を幅広く抽出してください。' : '業種: 「' + q + '」に該当する銘柄から条件を満たすものを抽出してください。';
+  var fullPrompt = sectorNote + '\n' + sizeDesc + '\n\n' + STOCK_PROMPT;
+
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + GEMINI_KEY, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      contents: [{parts: [{text: fullPrompt}]}],
+      generationConfig: {maxOutputTokens: 16384, temperature: 0.1, responseMimeType: 'application/json'}
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(d) {
+    clearLoading();
+    if (!d.candidates || !d.candidates[0]) {
+      setStatus('結果を取得できませんでした。' + (d.error ? d.error.message : ''), true);
+      return;
+    }
+    var text = d.candidates[0].content.parts[0].text;
+    try {
+      var data = JSON.parse(text);
+      var stocks = data.stocks || data;
+      if (!Array.isArray(stocks) || stocks.length === 0) {
+        setStatus('該当する銘柄が見つかりませんでした。');
+        return;
+      }
+      setStatus(stocks.length + '件の銘柄を推薦しました');
+      searchCache['stock:' + currentStockSize + ':' + q] = stocks;
+      renderResults('stock', stocks, q);
+    } catch(e) {
+      setStatus('データ解析エラー: ' + e.message, true);
+    }
+  })
+  .catch(function(e) {
+    clearLoading();
+    setStatus('検索エラー: ' + e.message, true);
+  });
+}
+
+// ---- 高配当株レンダリング ----
+function renderStock(el, stocks, query) {
+  var html = '';
+  var CHECK_LABELS = {
+    revenue:'売上・収益↑', roe:'ROE>8%', opMargin:'営業利益率>10%',
+    eps:'EPS↑', opCF:'営業CF黒字', dps:'一株配当↑',
+    payout:'配当性向30-50%', equityRatio:'自己資本比率>40%', cash:'現金等↑'
+  };
+  var CHECK_CATS = {
+    revenue:'業績', roe:'業績', opMargin:'業績', eps:'業績', opCF:'業績',
+    dps:'配当', payout:'配当', equityRatio:'財務', cash:'財務'
+  };
+  var CHECK_ORDER = ['revenue','roe','opMargin','eps','opCF','dps','payout','equityRatio','cash'];
+
+  // サマリー
+  var buyCount = 0, holdCount = 0, avoidCount = 0;
+  var timBuy = 0, timWait = 0, timHold = 0;
+  stocks.forEach(function(s) {
+    if (s.verdict === 'buy') buyCount++;
+    else if (s.verdict === 'hold') holdCount++;
+    else avoidCount++;
+    var t = s.timing || {};
+    if (t.timingVerdict === '買い時') timBuy++;
+    else if (t.timingVerdict === '待ち') timWait++;
+    else timHold++;
+  });
+
+  html += '<div class="card">';
+  var sizeLabel = currentStockSize === 'large' ? '大型株' : currentStockSize === 'mid' ? '中型株' : currentStockSize === 'small' ? '小型株' : '全規模';
+  html += '<div style="font-size:14px;font-weight:bold;color:var(--accent);margin-bottom:6px;">AI銘柄推薦結果</div>';
+  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">条件: '+esc(sizeLabel)+' × '+esc(query)+' / 9項目スクリーニング判定</div>';
+  html += '<div class="geo-grid">';
+  html += '<div class="geo-box"><div class="g-val">'+stocks.length+'</div><div class="g-lbl">分析銘柄数</div></div>';
+  html += '<div class="geo-box" style="border-left-color:var(--good);"><div class="g-val" style="color:var(--good);">'+buyCount+'</div><div class="g-lbl">購入候補</div></div>';
+  html += '<div class="geo-box" style="border-left-color:var(--warn);"><div class="g-val" style="color:var(--warn);">'+holdCount+'</div><div class="g-lbl">様子見</div></div>';
+  html += '<div class="geo-box" style="border-left-color:var(--bad);"><div class="g-val" style="color:var(--bad);">'+avoidCount+'</div><div class="g-lbl">見送り</div></div>';
+  html += '</div>';
+  html += '<div style="font-size:12px;font-weight:bold;color:var(--text);margin-top:10px;margin-bottom:4px;">購入タイミング</div>';
+  html += '<div class="geo-grid">';
+  html += '<div class="geo-box" style="border-left-color:var(--good);"><div class="g-val" style="color:var(--good);">'+timBuy+'</div><div class="g-lbl">買い時</div></div>';
+  html += '<div class="geo-box" style="border-left-color:var(--warn);"><div class="g-val" style="color:var(--warn);">'+timHold+'</div><div class="g-lbl">様子見</div></div>';
+  html += '<div class="geo-box" style="border-left-color:var(--bad);"><div class="g-val" style="color:var(--bad);">'+timWait+'</div><div class="g-lbl">待ち</div></div>';
+  html += '</div></div>';
+
+  // 合格率比較チャート
+  html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:8px;">銘柄別 スクリーニング合格状況</div>'
+    + '<div class="chart-wrap" style="height:'+Math.max(220, stocks.length*35)+'px;"><canvas id="stockPassChart"></canvas></div></div>';
+
+  // 銘柄詳細
+  stocks.forEach(function(s, idx) {
+    var checks = s.checks || {};
+    var passCount = 0, totalChecks = CHECK_ORDER.length;
+    CHECK_ORDER.forEach(function(k){if(checks[k] && checks[k].pass) passCount++;});
+    var passRate = Math.round(passCount / totalChecks * 100);
+
+    var verdictColor = s.verdict === 'buy' ? 'var(--good)' : s.verdict === 'hold' ? 'var(--warn)' : 'var(--bad)';
+    var verdictLabel = s.verdict === 'buy' ? '購入候補' : s.verdict === 'hold' ? '様子見' : '見送り';
+
+    html += '<div class="card" style="border-left:4px solid '+verdictColor+';">';
+
+    // ヘッダー
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+    html += '<div>';
+    html += '<div style="font-size:15px;font-weight:bold;color:var(--text);"><span style="color:var(--muted);font-size:12px;">'+esc(s.code)+'</span> '+esc(s.name)+'</div>';
+    html += '<div style="font-size:12px;color:var(--muted);">'+esc(s.sector)+'</div>';
+    html += '</div>';
+    html += '<div style="text-align:right;">';
+    html += '<div style="font-size:11px;padding:3px 10px;border-radius:4px;background:'+verdictColor+';color:#fff;font-weight:bold;">'+verdictLabel+'</div>';
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">合格 '+passCount+'/'+totalChecks+'</div>';
+    html += '</div></div>';
+
+    // 基本指標
+    html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:13px;">';
+    html += '<span>利回り: <strong style="color:var(--accent2);">'+esc(s.yield)+'%</strong></span>';
+    html += '<span>PBR: <strong style="color:var(--info);">'+esc(s.pbr)+'倍</strong></span>';
+    if (checks.roe && checks.roe.value) html += '<span>ROE: <strong>'+esc(checks.roe.value)+'%</strong></span>';
+    if (checks.opMargin && checks.opMargin.value) html += '<span>営業利益率: <strong>'+esc(checks.opMargin.value)+'%</strong></span>';
+    if (checks.payout && checks.payout.value) html += '<span>配当性向: <strong>'+esc(checks.payout.value)+'%</strong></span>';
+    if (checks.equityRatio && checks.equityRatio.value) html += '<span>自己資本比率: <strong>'+esc(checks.equityRatio.value)+'%</strong></span>';
+    html += '</div>';
+
+    // 9項目チェックリスト
+    var lastCat = '';
+    CHECK_ORDER.forEach(function(k) {
+      var cat = CHECK_CATS[k];
+      if (cat !== lastCat) {
+        html += '<div style="font-size:11px;font-weight:bold;color:var(--muted);margin-top:8px;margin-bottom:2px;">'+cat+'</div>';
+        lastCat = cat;
+      }
+      var c = checks[k] || {};
+      var icon = c.pass ? '<span style="color:var(--good);">&#10003;</span>' : '<span style="color:var(--bad);">&#10007;</span>';
+      var noteColor = c.pass ? 'var(--sub)' : 'var(--bad)';
+      html += '<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);">';
+      html += '<span style="min-width:16px;">'+icon+'</span>';
+      html += '<span style="min-width:130px;color:var(--text);">'+CHECK_LABELS[k]+'</span>';
+      html += '<span style="flex:1;color:'+noteColor+';font-size:11px;">'+esc(c.note || '')+'</span>';
+      html += '</div>';
+    });
+
+    // 総合判定理由
+    html += '<div style="margin-top:10px;padding:8px 10px;border-radius:6px;background:var(--hover);font-size:12px;line-height:1.8;border-left:3px solid '+verdictColor+';">';
+    html += '<strong style="color:'+verdictColor+';">銘柄判定:</strong> '+esc(s.verdictReason || '');
+    html += '</div>';
+
+    // 購入タイミング判定
+    var t = s.timing || {};
+    if (t.price || t.timingVerdict) {
+      var timColor = t.timingVerdict === '買い時' ? 'var(--good)' : t.timingVerdict === '様子見' ? 'var(--warn)' : 'var(--bad)';
+      html += '<div style="margin-top:10px;padding:10px;border-radius:8px;background:var(--card);border:1px solid var(--border);">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+      html += '<span style="font-size:13px;font-weight:bold;color:var(--text);">購入タイミング判定</span>';
+      if (t.timingVerdict) {
+        html += '<span style="font-size:12px;padding:3px 12px;border-radius:4px;background:'+timColor+';color:#fff;font-weight:bold;">'+esc(t.timingVerdict)+'</span>';
+      }
+      html += '</div>';
+
+      // 指標グリッド
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px;">';
+      // 株価
+      if (t.price) {
+        html += '<div style="padding:6px;background:var(--hover);border-radius:6px;text-align:center;">';
+        html += '<div style="font-size:16px;font-weight:bold;color:var(--text);">'+esc(t.price)+'<span style="font-size:11px;color:var(--muted);">円</span></div>';
+        html += '<div style="font-size:10px;color:var(--muted);">直近株価</div></div>';
+      }
+      // PER
+      if (t.per) {
+        var perColor = t.perJudge === '割安' ? 'var(--good)' : t.perJudge === '割高' ? 'var(--bad)' : 'var(--sub)';
+        html += '<div style="padding:6px;background:var(--hover);border-radius:6px;text-align:center;">';
+        html += '<div style="font-size:16px;font-weight:bold;color:'+perColor+';">'+esc(t.per)+'<span style="font-size:11px;">倍</span></div>';
+        html += '<div style="font-size:10px;color:'+perColor+';">PER '+esc(t.perJudge || '')+'</div></div>';
+      }
+      // PBR
+      if (t.pbr) {
+        var pbrColor = t.pbrJudge === '割安' ? 'var(--good)' : t.pbrJudge === '割高' ? 'var(--bad)' : 'var(--sub)';
+        html += '<div style="padding:6px;background:var(--hover);border-radius:6px;text-align:center;">';
+        html += '<div style="font-size:16px;font-weight:bold;color:'+pbrColor+';">'+esc(t.pbr)+'<span style="font-size:11px;">倍</span></div>';
+        html += '<div style="font-size:10px;color:'+pbrColor+';">PBR '+esc(t.pbrJudge || '')+'</div></div>';
+      }
+      // 配当利回り
+      if (t.yield) {
+        var yldColor = t.yieldJudge === '魅力的' ? 'var(--good)' : t.yieldJudge === '低い' ? 'var(--bad)' : 'var(--sub)';
+        html += '<div style="padding:6px;background:var(--hover);border-radius:6px;text-align:center;">';
+        html += '<div style="font-size:16px;font-weight:bold;color:'+yldColor+';">'+esc(t.yield)+'<span style="font-size:11px;">%</span></div>';
+        html += '<div style="font-size:10px;color:'+yldColor+';">利回り '+esc(t.yieldJudge || '')+'</div></div>';
+      }
+      // 高値からの下落率
+      if (t.dropPct) {
+        var dropNum = parseFloat(t.dropPct) || 0;
+        var dropColor = t.dropJudge === '割安圏' ? 'var(--good)' : t.dropJudge === '高値圏' ? 'var(--bad)' : 'var(--warn)';
+        html += '<div style="padding:6px;background:var(--hover);border-radius:6px;text-align:center;">';
+        html += '<div style="font-size:16px;font-weight:bold;color:'+dropColor+';">-'+esc(t.dropPct)+'<span style="font-size:11px;">%</span></div>';
+        html += '<div style="font-size:10px;color:'+dropColor+';">高値比 '+esc(t.dropJudge || '')+'</div>';
+        if (t.highPrice) html += '<div style="font-size:9px;color:var(--muted);">高値: '+esc(t.highPrice)+'円</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+
+      // タイミング判定理由
+      if (t.timingReason) {
+        html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;padding:6px 8px;background:var(--hover);border-radius:6px;border-left:3px solid '+timColor+';">';
+        html += '<strong style="color:'+timColor+';">判定:</strong> '+esc(t.timingReason);
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    // 外部リンク
+    html += '<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;">';
+    html += '<a href="https://irbank.net/'+esc(s.code)+'" target="_blank" style="font-size:11px;color:var(--info);">IR BANK</a>';
+    html += '<a href="https://irbank.net/'+esc(s.code)+'/results" target="_blank" style="font-size:11px;color:var(--info);">業績推移</a>';
+    html += '<a href="https://irbank.net/'+esc(s.code)+'/dividend" target="_blank" style="font-size:11px;color:var(--info);">配当推移</a>';
+    html += '<a href="https://irbank.net/'+esc(s.code)+'/finance" target="_blank" style="font-size:11px;color:var(--info);">財務推移</a>';
+    html += '<a href="https://finance.yahoo.co.jp/quote/'+esc(s.code)+'.T" target="_blank" style="font-size:11px;color:var(--info);">Yahoo!ファイナンス</a>';
+    html += '<a href="https://www.google.com/finance/quote/'+esc(s.code)+':TYO" target="_blank" style="font-size:11px;color:var(--info);">Google Finance</a>';
+    html += '</div>';
+
+    html += '</div>';
+  });
+
+  html += '<div class="card"><div style="font-size:10px;color:var(--muted);line-height:1.8;">'
+    + '※ 上記データはGemini AIの学習データに基づく参考情報です。投資判断の前に、各銘柄のIR BANKリンクから最新の業績・配当・財務データを必ず確認してください。<br>'
+    + '※ スクリーニング基準: 売上↑ / ROE>8% / 営業利益率>10% / EPS↑ / 営業CF黒字 / 配当↑ / 配当性向30-50% / 自己資本比率>40% / 現金↑<br>'
+    + 'Powered by Gemini API</div></div>';
+
+  el.innerHTML = html;
+
+  // 合格率バーチャート
+  if (stocks.length > 0) {
+    var passData = stocks.map(function(s) {
+      var c = s.checks || {};
+      var p = 0;
+      CHECK_ORDER.forEach(function(k){if(c[k] && c[k].pass) p++;});
+      return p;
+    });
+    var failData = stocks.map(function(s){return CHECK_ORDER.length - (passData[stocks.indexOf(s)] || 0);});
+
+    charts.stockPass = new Chart(document.getElementById('stockPassChart'), {
+      type: 'bar',
+      data: {
+        labels: stocks.map(function(s){return s.name;}),
+        datasets: [
+          {label:'合格', data:passData, backgroundColor:'rgba(39,174,96,0.6)', borderRadius:4},
+          {label:'不合格', data:stocks.map(function(s,i){return CHECK_ORDER.length - passData[i];}), backgroundColor:'rgba(192,57,43,0.3)', borderRadius:4}
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {legend:{labels:{font:{size:11}}}},
+        scales: {x: {stacked:true, max:CHECK_ORDER.length, ticks:{stepSize:1}}, y:{stacked:true}}
+      }
     });
   }
 }
