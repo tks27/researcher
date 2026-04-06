@@ -684,7 +684,7 @@ function searchGeo(q) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       contents: [{parts: [{text: '「' + q + '」\n\n' + GEO_PROMPT}]}],
-      generationConfig: {maxOutputTokens: 8192, temperature: 0.2, responseMimeType: 'application/json'}
+      generationConfig: {maxOutputTokens: 8192, temperature: 0.2, responseMimeType: 'application/json', thinkingConfig: {thinkingBudget: 0}}
     })
   })
   .then(function(r){return r.json();})
@@ -1434,7 +1434,7 @@ function searchStock(q) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       contents: [{parts: [{text: fullPrompt}]}],
-      generationConfig: {maxOutputTokens: 16384, temperature: 0.1, responseMimeType: 'application/json'}
+      generationConfig: {maxOutputTokens: 16384, temperature: 0.1, responseMimeType: 'application/json', thinkingConfig: {thinkingBudget: 0}}
     })
   })
   .then(function(r){return r.json();})
@@ -1730,7 +1730,7 @@ function searchPolicy(q, append) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       contents: [{parts: [{text: fullPrompt}]}],
-      generationConfig: {maxOutputTokens: 8192, temperature: 0.3, responseMimeType: 'application/json'}
+      generationConfig: {maxOutputTokens: 8192, temperature: 0.3, responseMimeType: 'application/json', thinkingConfig: {thinkingBudget: 0}}
     })
   })
   .then(function(r){return r.json();})
