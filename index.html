@@ -136,7 +136,9 @@ var CATEGORIES = [
   {id:'tech', label:'技術トレンド', icon:'', placeholder:'例: react, rust, deno',
     suggestions:['react','vue','svelte','rust','deno','bun','htmx','tailwindcss']},
   {id:'stock', label:'高配当株', icon:'', placeholder:'業種タグをクリック、または自由入力で検索',
-    suggestions:[], stockSectors: true}
+    suggestions:[], stockSectors: true},
+  {id:'policy', label:'行政先進事例', icon:'', placeholder:'ジャンルタグをクリック、または自由入力で検索',
+    suggestions:[], policyGenres: true}
 ];
 
 var currentTab = 'paper';
@@ -288,6 +290,38 @@ function renderSuggestions() {
     return;
   }
 
+  if (cat.policyGenres) {
+    var POLICY_GENRES = [
+      {label:'地方創生・移住定住', query:'地方創生 移住定住'},
+      {label:'子育て支援', query:'子育て支援 少子化対策'},
+      {label:'DX・スマートシティ', query:'自治体DX スマートシティ'},
+      {label:'脱炭素・環境', query:'脱炭素 ゼロカーボン 環境'},
+      {label:'関係人口・協働', query:'関係人口 市民協働'},
+      {label:'公民連携', query:'公民連携 PPP PFI 官民連携 民間活力'},
+      {label:'公共交通', query:'公共交通 MaaS 地域交通'},
+      {label:'住民向け教育', query:'住民向け教育 生涯学習 リカレント教育 学校教育改革'},
+      {label:'職員の人材育成', query:'自治体職員 人材育成 研修改革 組織開発'},
+      {label:'防災・減災', query:'防災 減災 レジリエンス'},
+      {label:'健康・福祉', query:'健康づくり 介護予防 地域包括ケア'},
+      {label:'観光振興', query:'観光振興 インバウンド DMO'},
+      {label:'農業・一次産業', query:'農業振興 六次産業化 スマート農業'},
+      {label:'空き家・住宅', query:'空き家対策 住宅政策 リノベーション'},
+      {label:'公共施設マネジメント', query:'公共施設マネジメント 統廃合 複合化 長寿命化'},
+      {label:'財政改革', query:'財政健全化 行財政改革 ふるさと納税'},
+    ];
+    POLICY_GENRES.forEach(function(g) {
+      var btn = document.createElement('button');
+      btn.textContent = g.label;
+      btn.style.cssText = 'border-color:var(--accent);color:var(--accent);';
+      btn.onclick = function() {
+        document.getElementById('searchInput').value = g.query;
+        doSearch();
+      };
+      el.appendChild(btn);
+    });
+    return;
+  }
+
   cat.suggestions.forEach(function(s) {
     var btn = document.createElement('button');
     btn.textContent = s;
@@ -308,7 +342,7 @@ function doSearch() {
     renderResults(currentTab, searchCache[cacheKey], q);
     return;
   }
-  var fns = {paper: searchPapers, food: searchFood, geo: searchGeo, tech: searchTech, stock: searchStock};
+  var fns = {paper: searchPapers, food: searchFood, geo: searchGeo, tech: searchTech, stock: searchStock, policy: searchPolicy};
   fns[currentTab](q);
 }
 
@@ -965,6 +999,7 @@ function renderResults(tab, data, query) {
   else if (tab === 'geo') renderGeo(el, data, query);
   else if (tab === 'tech') renderTech(el, data, query);
   else if (tab === 'stock') renderStock(el, data, query);
+  else if (tab === 'policy') renderPolicy(el, data, query);
 }
 
 // ---- 論文レンダリング ----
@@ -1334,6 +1369,14 @@ var STOCK_PROMPT = '以下の条件でスクリーニングし、条件を満た
   + '【前提条件（これを満たさない銘柄は最初から除外すること）】\n'
   + '・配当利回りが3%以上であること（3%未満は対象外）\n'
   + '・EPS（一株利益）が過去10年で右肩上がりであること（EPSが横ばいまたは下落傾向の銘柄は対象外）\n\n'
+  + '【セクター特性の考慮】\n'
+  + '上記の数値基準は一般的な目安であり、業種（セクター）によって特性が異なる。以下を考慮して柔軟に判定すること:\n'
+  + '・銀行・保険・証券等の金融業: 自己資本比率の基準が一般企業と異なる（BIS規制等）。営業利益率ではなく経常利益率で評価。営業CFの概念も異なる\n'
+  + '・電力・ガス等のインフラ業: 設備投資が大きく現金等が右肩上がりになりにくい。安定配当を重視\n'
+  + '・商社: 資源価格の変動により売上・利益が大きく変動するため、トレンドよりも平均水準で評価\n'
+  + '・REIT: 配当性向は90%超が制度上の要件であり、30-50%基準は適用外。分配金利回りと物件稼働率で評価\n'
+  + '・不動産: 物件売却の有無で単年度の業績が大きく変動するため、複数年平均で評価\n'
+  + '・上記以外のセクターでも業界特有の事情がある場合は、基準値を若干柔軟に解釈してよい。ただし判定理由にその旨を明記すること\n\n'
   + '【スクリーニング条件（全項目を過去10年で判定）】\n'
   + '＜業績＞\n'
   + '①売上・収益の推移 → 右肩上がりか？\n'
@@ -1636,6 +1679,206 @@ function renderStock(el, stocks, query) {
       }
     });
   }
+}
+
+// ===== 6. 行政先進事例リサーチ (Gemini API) =====
+var POLICY_PROMPT = '以下のジャンルについて、日本の自治体の先進的な取組事例を検索し、JSONで出力してください。\n\n'
+  + '【重要ルール】\n'
+  + '・実在する自治体の実在する取組のみ回答すること（架空の事例は絶対に作らない）\n'
+  + '・以下のいずれかの受賞・認定歴がある事例には awarded: true を付けること:\n'
+  + '　総務省ふるさとづくり大賞、地方創生☆政策アイデアコンテスト、日本DX大賞、\n'
+  + '　環境省脱炭素先行地域、内閣府地方創生優良事例、SDGs未来都市、\n'
+  + '　デジタル田園都市国家構想交付金採択、健康寿命をのばそう！アワード、\n'
+  + '　その他国の表彰・大臣賞等\n'
+  + '・受賞歴が不明な場合は awarded: false\n'
+  + '・日本の事例を8〜12件、海外の参考事例を2〜3件\n'
+  + '・各事例に「なぜ成功したか」のポイントを含めること\n\n'
+  + 'JSONスキーマ:\n'
+  + '{"cases":[{"municipality":"自治体名","prefecture":"都道府県（海外の場合は国名）","country":"日本/海外国名",'
+  + '"title":"取組名称","summary":"概要（100字程度）","successPoint":"成功要因","awarded":true/false,'
+  + '"awardName":"受賞名（あれば）","population":"人口規模","year":"開始年","genre":"ジャンル"}]}';
+
+// 既出事例を記録（ジャンルごと）
+var policyShownCases = {};
+var policyLastQuery = '';
+
+function searchPolicy(q, append) {
+  if (!ensureGeminiKey()) {
+    setStatus('Gemini APIキーが設定されていません。', true);
+    return;
+  }
+
+  // ジャンルが変わったらリセット
+  if (q !== policyLastQuery) {
+    policyShownCases[q] = [];
+    policyLastQuery = q;
+  }
+  if (!policyShownCases[q]) policyShownCases[q] = [];
+
+  var excludeList = policyShownCases[q];
+  var excludeNote = '';
+  if (excludeList.length > 0) {
+    excludeNote = '\n\n【除外リスト（既出のため除外すること）】\n' + excludeList.join('、') + '\n上記の自治体・取組は既に表示済みのため、それ以外の事例を出力してください。';
+  }
+
+  setLoading(append ? '追加事例を検索中…' : 'Gemini API で先進事例を検索中…');
+
+  var fullPrompt = 'ジャンル: 「' + q + '」' + excludeNote + '\n\n' + POLICY_PROMPT;
+
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + GEMINI_KEY, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      contents: [{parts: [{text: fullPrompt}]}],
+      generationConfig: {maxOutputTokens: 8192, temperature: 0.3, responseMimeType: 'application/json'}
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(d) {
+    clearLoading();
+    if (!d.candidates || !d.candidates[0]) {
+      setStatus('結果を取得できませんでした。', true);
+      return;
+    }
+    var text = d.candidates[0].content.parts[0].text;
+    try {
+      var data = JSON.parse(text);
+      var newCases = data.cases || data;
+      if (!Array.isArray(newCases) || newCases.length === 0) {
+        setStatus('これ以上の事例は見つかりませんでした。');
+        return;
+      }
+      // 既出リストに追加
+      newCases.forEach(function(c) {
+        var key = (c.municipality || '') + ':' + (c.title || '');
+        if (policyShownCases[q].indexOf(key) < 0) policyShownCases[q].push(key);
+      });
+      // 追加モード: 既存結果にマージ
+      var allCases;
+      if (append && searchCache['policy:' + q]) {
+        allCases = searchCache['policy:' + q].concat(newCases);
+      } else {
+        allCases = newCases;
+        // 初回も既出リストに追加
+        newCases.forEach(function(c) {
+          var key = (c.municipality || '') + ':' + (c.title || '');
+          if (policyShownCases[q].indexOf(key) < 0) policyShownCases[q].push(key);
+        });
+      }
+      setStatus('合計 ' + allCases.length + '件の事例を表示中');
+      searchCache['policy:' + q] = allCases;
+      renderResults('policy', allCases, q);
+    } catch(e) {
+      setStatus('データ解析エラー: ' + e.message, true);
+    }
+  })
+  .catch(function(e) {
+    clearLoading();
+    setStatus('検索エラー: ' + e.message, true);
+  });
+}
+
+// ---- 行政先進事例レンダリング ----
+function renderPolicy(el, cases, query) {
+  var html = '';
+
+  // 国内・海外を分離
+  var domestic = cases.filter(function(c){return !c.country || c.country === '日本';});
+  var overseas = cases.filter(function(c){return c.country && c.country !== '日本';});
+  var awardedCount = cases.filter(function(c){return c.awarded;}).length;
+
+  // サマリー
+  html += '<div class="card">';
+  html += '<div style="font-size:14px;font-weight:bold;color:var(--accent);margin-bottom:10px;">行政先進事例 — '+esc(query)+'</div>';
+  html += '<div class="geo-grid">';
+  html += '<div class="geo-box"><div class="g-val">'+domestic.length+'</div><div class="g-lbl">国内事例</div></div>';
+  html += '<div class="geo-box"><div class="g-val">'+overseas.length+'</div><div class="g-lbl">海外参考事例</div></div>';
+  html += '<div class="geo-box" style="border-left-color:var(--accent2);"><div class="g-val" style="color:var(--accent2);">'+awardedCount+'</div><div class="g-lbl">受賞・認定あり</div></div>';
+  html += '</div></div>';
+
+  // 国内事例
+  if (domestic.length > 0) {
+    html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--accent);margin-bottom:10px;">国内の先進事例</div>';
+    domestic.forEach(function(c) {
+      var borderColor = c.awarded ? 'var(--accent2)' : 'var(--accent)';
+      html += '<div class="result-item" style="border-left-color:'+borderColor+';">';
+
+      // ヘッダー
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;">';
+      html += '<div>';
+      if (c.awarded) {
+        html += '<span style="color:var(--accent2);font-size:14px;margin-right:4px;" title="'+esc(c.awardName || '受賞・認定あり')+'">&#9733;</span>';
+      }
+      html += '<strong style="font-size:14px;color:var(--text);">'+esc(c.municipality)+'</strong>';
+      html += '<span style="font-size:12px;color:var(--muted);margin-left:6px;">'+esc(c.prefecture || '')+'</span>';
+      if (c.population) html += '<span style="font-size:11px;color:var(--muted);margin-left:6px;">（'+esc(c.population)+'）</span>';
+      html += '</div>';
+      if (c.year) html += '<span style="font-size:11px;color:var(--muted);">'+esc(c.year)+'年〜</span>';
+      html += '</div>';
+
+      // 取組名
+      html += '<div style="font-size:13px;font-weight:bold;color:var(--accent);margin:6px 0 4px;">'+esc(c.title)+'</div>';
+
+      // 受賞バッジ
+      if (c.awarded && c.awardName) {
+        html += '<div style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(240,168,64,0.15);color:var(--accent2);border:1px solid var(--accent2);margin-bottom:6px;">'+esc(c.awardName)+'</div>';
+      }
+
+      // 概要
+      html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;margin-bottom:6px;">'+esc(c.summary)+'</div>';
+
+      // 成功要因
+      html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;padding:6px 8px;background:var(--hover);border-radius:6px;border-left:2px solid var(--good);">';
+      html += '<strong style="color:var(--good);font-size:11px;">成功要因:</strong> '+esc(c.successPoint);
+      html += '</div>';
+
+      // 検索リンク
+      html += '<div style="margin-top:6px;">';
+      html += '<a href="https://www.google.com/search?q='+encodeURIComponent(c.municipality+' '+c.title)+'" target="_blank" style="font-size:11px;color:var(--info);margin-right:12px;">Google検索</a>';
+      html += '<a href="https://ja.wikipedia.org/wiki/'+encodeURIComponent(c.municipality)+'" target="_blank" style="font-size:11px;color:var(--info);margin-right:12px;">Wikipedia</a>';
+      html += '</div>';
+
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 海外参考事例
+  if (overseas.length > 0) {
+    html += '<div class="card"><div style="font-size:13px;font-weight:bold;color:var(--info);margin-bottom:10px;">海外の参考事例</div>';
+    overseas.forEach(function(c) {
+      html += '<div class="result-item" style="border-left-color:var(--info);opacity:0.85;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">';
+      html += '<span style="font-size:12px;padding:2px 8px;border-radius:4px;background:var(--info);color:#fff;">'+esc(c.country)+'</span>';
+      html += '<strong style="font-size:14px;color:var(--text);">'+esc(c.municipality)+'</strong>';
+      html += '</div>';
+      html += '<div style="font-size:13px;font-weight:bold;color:var(--info);margin-bottom:4px;">'+esc(c.title)+'</div>';
+      html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;margin-bottom:6px;">'+esc(c.summary)+'</div>';
+      html += '<div style="font-size:12px;color:var(--sub);line-height:1.8;padding:6px 8px;background:var(--hover);border-radius:6px;border-left:2px solid var(--info);">';
+      html += '<strong style="color:var(--info);font-size:11px;">日本への示唆:</strong> '+esc(c.successPoint);
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // 追加検索ボタン
+  html += '<div style="text-align:center;margin:16px 0;">';
+  html += '<button onclick="searchPolicy(\''+esc(query).replace(/'/g,"\\'")+'\', true)" '
+    + 'style="padding:10px 28px;font-size:13px;border:2px solid var(--accent);border-radius:8px;background:var(--card);color:var(--accent);cursor:pointer;font-weight:bold;transition:all 0.2s;" '
+    + 'onmouseover="this.style.background=\'var(--accent)\';this.style.color=\'#fff\'" '
+    + 'onmouseout="this.style.background=\'var(--card)\';this.style.color=\'var(--accent)\'">'
+    + '同じジャンルで他の事例を検索</button>';
+  html += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">表示済み '+cases.length+'件を除外して追加検索します</div>';
+  html += '</div>';
+
+  // 注記
+  html += '<div class="card"><div style="font-size:10px;color:var(--muted);line-height:1.8;">'
+    + '※ <span style="color:var(--accent2);">&#9733;</span> = 国の表彰・受賞歴がある事例（総務省ふるさとづくり大賞、日本DX大賞、SDGs未来都市等）<br>'
+    + '※ 事例情報はGemini AIの知識に基づく参考情報です。詳細は各自治体の公式サイトや関連記事をご確認ください。<br>'
+    + 'Powered by Gemini API</div></div>';
+
+  el.innerHTML = html;
 }
 
 // ===== ユーティリティ =====
